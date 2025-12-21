@@ -7,7 +7,7 @@
 
 - name: images_sync ( {{ pull_args }} )
   command: >
-    skopeo sync --src docker --dest docker {{ pull_args }} {{ images_mirror | default("registry.cn-beijing.aliyuncs.com/kubesphereio") }} -a
+    skopeo sync --src docker --dest docker {{ pull_args }} {{ images_mirror | default("watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub") }} -a
   register: pull_task_result
   until: pull_task_result is succeeded
   retries: 4

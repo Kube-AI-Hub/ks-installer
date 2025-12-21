@@ -21,6 +21,10 @@ data:
           secret: kubesphere
           redirectURIs:
           - '*'
+        - name: kube-ai-hub
+          secret: kube-ai-hub
+          redirectURIs:
+          - '*'
 {% if (common.openldap is defined and common.openldap.enabled is defined and common.openldap.enabled) or devops.enabled %}
     ldap:
       host: openldap.kubesphere-system.svc:389

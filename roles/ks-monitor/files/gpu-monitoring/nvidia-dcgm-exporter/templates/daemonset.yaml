@@ -99,13 +99,13 @@ spec:
           httpGet:
             path: /health
             port: {{ .Values.service.port }}
-          initialDelaySeconds: 30
-          periodSeconds: 5
+          initialDelaySeconds: 200
+          periodSeconds: 15
         readinessProbe:
           httpGet:
             path: /health
             port: {{ .Values.service.port }}
-          initialDelaySeconds: 30
+          initialDelaySeconds: 120
         {{- if .Values.resources }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}

@@ -1,7 +1,7 @@
 operator:
   enabled: true
   image:
-    repository: kubesphere/kube-events-operator
+    repository: kube-ai-hub/kube-events-operator
     tag: "" # If unset use v+ .Chart.appVersion
     pullPolicy: IfNotPresent
   configReloader:

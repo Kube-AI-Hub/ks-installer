@@ -144,6 +144,9 @@ persistence:
   enableInitChown: true
   labels:
     enabled: false
+  image: {{ busybox_repo }}/busybox:{{ busybox_tag }}
+
+
 
 {% if persistence.storageClass is defined and persistence.storageClass != "" %}
   storageClass: "{{ persistence.storageClass }}"

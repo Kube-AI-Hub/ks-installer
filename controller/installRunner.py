@@ -25,17 +25,22 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 ks_hook = '''
 {
-	"onKubernetesEvent": [{
+    "configVersion": "v1",
+    "kubernetes": [{
 		"name": "Monitor clusterconfiguration",
 		"kind": "ClusterConfiguration",
-		"event": [ "add", "update" ],
-		"objectName": "ks-installer",
-		"namespaceSelector": {
-			"matchNames": ["kubesphere-system"]
-		},
-		"jqFilter": ".spec",
-		"allowFailure": false
-	}]
+        "executeHookOnEvent": [ "Added", "Modified" ],
+        "nameSelector": {
+            "matchNames": ["ks-installer"]
+        },
+        "namespace": {
+            "nameSelector": {
+                "matchNames": ["kubesphere-system"]
+            }
+        },
+        "jqFilter": ".spec",
+        "allowFailure": false
+    }]
 }
 '''
 

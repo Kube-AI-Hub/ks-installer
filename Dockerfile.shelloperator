@@ -1,22 +1,12 @@
-FROM golang:1.17-alpine3.16
+FROM ghcr.io/flant/shell-operator:v1.6.2 AS shell-operator
 
-ARG appVersion=latest
-
-RUN apk --no-cache add git ca-certificates && \
-    git clone --branch v1.0.0-beta.5 https://github.com/flant/shell-operator.git /go/src/github.com/flant/shell-operator
-
-RUN go get -d github.com/flant/shell-operator/...
-
-WORKDIR /go/src/github.com/flant/shell-operator
-
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X 'github.com/flant/shell-operator/pkg/app.Version=$appVersion'" -o shell-operator ./cmd/shell-operator
-
-
-FROM python:3.10-alpine
+FROM python:3.10-alpine3.23
 
 ENV ARCH=amd64
 
-RUN apk --no-cache add jq yq bash curl unzip openssl && \
+# 使用国内镜像源加速
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+RUN apk --no-cache add yq bash curl unzip openssl && \
     apk --no-cache add gcc libffi-dev openssl-dev musl-dev && \
     export CRYPTOGRAPHY_DONT_BUILD_RUST=1 && \
     pip install --no-cache-dir ansible_runner==2.2.0 ansible==2.9.27 kubernetes --use-deprecated=legacy-resolver && \
@@ -34,15 +24,21 @@ RUN apk --no-cache add jq yq bash curl unzip openssl && \
     mkdir -p /hooks/kubesphere /kubesphere/installer/roles /kubesphere/results/env /kubesphere/playbooks /kubesphere/config &&\
     adduser -D -g kubesphere -u 1002 kubesphere
 
-COPY --from=0 /go/src/github.com/flant/shell-operator/shell-operator /
+COPY --from=shell-operator /frameworks/shell /frameworks/shell
+COPY --from=shell-operator /shell_lib.sh /shell_lib.sh
+COPY --from=shell-operator /shell-operator /shell-operator
+COPY --from=shell-operator /usr/bin/jq /usr/bin/jq
+
 ADD controller/* /hooks/kubesphere/
 
 RUN chown -R kubesphere:kubesphere /shell-operator && \
     chown -R kubesphere:kubesphere /hooks && \
     chown -R kubesphere:kubesphere /kubesphere && \
-    chmod +x -R /hooks/kubesphere
+    chmod +x -R /hooks/kubesphere && \
+    mkdir -p /var/run/shell-operator && \
+    chown -R kubesphere:kubesphere /var/run/shell-operator
 
-ENV SHELL_OPERATOR_WORKING_DIR /hooks
+ENV SHELL_OPERATOR_HOOKS_DIR /hooks
 
 ENTRYPOINT ["/shell-operator"]
 

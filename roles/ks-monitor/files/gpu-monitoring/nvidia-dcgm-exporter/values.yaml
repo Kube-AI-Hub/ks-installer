@@ -13,11 +13,11 @@
 # limitations under the License.
 
 image:
-  repository: nvcr.io/nvidia/k8s/dcgm-exporter
+  repository: nvidia/dcgm-exporter
   pullPolicy: IfNotPresent
   # Image tag defaults to AppVersion, but you can use the tag key
   # for the image tag, e.g:
-  tag: 2.1.8-2.4.0-rc.3-ubuntu18.04
+  tag: 3.3.9-3.6.1-ubuntu22.04
 
 # Comment the following line to stop profiling metrics from DCGM
 arguments: ["-f", "/etc/dcgm-exporter/dcp-metrics-included.csv"]
@@ -63,13 +63,13 @@ service:
   # Annotations to add to the service
   annotations: {}
 
-resources: {}
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+resources:
+   limits:
+     cpu: 100m
+     memory: 512Mi
+   requests:
+     cpu: 100m
+     memory: 512Mi
 serviceMonitor:
   enabled: true
   interval: 15s

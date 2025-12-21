@@ -10,8 +10,13 @@ spec:
   persistence:
     storageClass: ""        # If there is no default StorageClass in your cluster, you need to specify an existing StorageClass here.
   authentication:
-    # adminPassword: ""     # Custom password of the admin user. If the parameter exists but the value is empty, a random password is generated. If the parameter does not exist, P@88w0rd is used.
+    adminPassword: ""     # Custom password of the admin user. If the parameter exists but the value is empty, a random password is generated. If the parameter does not exist, P@88w0rd is used.
     jwtSecret: ""           # Keep the jwtSecret consistent with the Host Cluster. Retrieve the jwtSecret by executing "kubectl -n kubesphere-system get cm kubesphere-config -o yaml | grep -v "apiVersion" | grep jwtSecret" on the Host Cluster.
+    authenticateRateLimiterDuration: 10m0s
+    authenticateRateLimiterMaxTries: 10
+    oauthOptions:
+      accessTokenInactivityTimeout: 60m
+      accessTokenMaxAge: 72h
   local_registry: ""        # Add your private registry address if it is needed.
 #  dev_tag: ""               # Add your kubesphere image tag you want to install, by default it's same as ks-installer release version.
   etcd:
@@ -43,7 +48,7 @@ spec:
       # type: external   # Whether to specify the external prometheus stack, and need to modify the endpoint at the next line.
       endpoint: http://prometheus-operated.kubesphere-monitoring-system.svc:9090 # Prometheus endpoint to get metrics data.
       GPUMonitoring:     # Enable or disable the GPU-related metrics. If you enable this switch but have no GPU resources, Kubesphere will set it to zero.
-        enabled: false
+        enabled: true
     gpu:                 # Install GPUKinds. The default GPU kind is nvidia.com/gpu. Other GPU kinds can be added here according to your needs.
       kinds:
       - resourceName: "nvidia.com/gpu"
@@ -86,14 +91,14 @@ spec:
       externalOpensearchHost: ""
       externalOpensearchPort: ""
       dashboard:
-        enabled: false
+        enabled: true
   alerting:                # (CPU: 0.1 Core, Memory: 100 MiB) It enables users to customize alerting policies to send messages to receivers in time with different time intervals and alerting levels to choose from.
-    enabled: false         # Enable or disable the KubeSphere Alerting System.
+    enabled: true         # Enable or disable the KubeSphere Alerting System.
     # thanosruler:
     #   replicas: 1
     #   resources: {}
   auditing:                # Provide a security-relevant chronological set of records，recording the sequence of activities happening on the platform, initiated by different tenants.
-    enabled: false         # Enable or disable the KubeSphere Auditing Log System.
+    enabled: true         # Enable or disable the KubeSphere Auditing Log System.
     # operator:
     #   resources: {}
     # webhook:
@@ -106,7 +111,7 @@ spec:
     jenkinsMemoryLim: 4Gi  # Recommend keep same as requests.memory.
     jenkinsVolumeSize: 16Gi
   events:                  # Provide a graphical web console for Kubernetes Events exporting, filtering and alerting in multi-tenant Kubernetes clusters.
-    enabled: false         # Enable or disable the KubeSphere Events System.
+    enabled: true         # Enable or disable the KubeSphere Events System.
     # operator:
     #   resources: {}
     # exporter:
@@ -116,7 +121,7 @@ spec:
       replicas: 2
     #   resources: {}
   logging:                 # (CPU: 57 m, Memory: 2.76 G) Flexible logging functions are provided for log query, collection and management in a unified console. Additional log collectors can be added, such as Elasticsearch, Kafka and Fluentd.
-    enabled: false         # Enable or disable the KubeSphere Logging System.
+    enabled: true         # Enable or disable the KubeSphere Logging System.
     logsidecar:
       enabled: true
       replicas: 2
@@ -202,5 +207,5 @@ spec:
     # audit:
     #   resources: {}
   terminal:
-    # image: 'alpine:3.15' # There must be an nsenter program in the image
+    image: 'alpine:3.23' # There must be an nsenter program in the image
     timeout: 600         # Container timeout, if set to 0, no timeout will be used. The unit is seconds

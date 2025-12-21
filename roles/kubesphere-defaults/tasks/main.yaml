@@ -1,8 +1,8 @@
 ---
 - name: KubeSphere | Setting images' namespace override
   set_fact:
-    namespace_override: "kubesphereio"
-  when: (local_registry is defined and local_registry == "registry.cn-beijing.aliyuncs.com") or (zone is defined and zone == "cn")
+    namespace_override: "kube-ai-hub"
+  when: (local_registry is defined and local_registry != "") or (zone is defined and zone == "cn")
 
 - name: KubeSphere | Configuring defaults
   debug:

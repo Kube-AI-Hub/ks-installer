@@ -9,7 +9,7 @@ metadata:
 spec:
   containers:
     - name: wget
-      image: busybox
+      image: {{ busybox_repo }}/busybox:{{ busybox_tag }}
       command: ['wget']
       args:  ['{{ include "openldap-ha.fullname" . }}:{{ .Values.service.port }}']
   restartPolicy: Never

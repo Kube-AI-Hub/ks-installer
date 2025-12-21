@@ -3,17 +3,17 @@
 # Declare variables to be passed into your templates.
 
 image:
-  repository: nvcr.io/nvidia/k8s/dcgm-exporter
+  repository: {{ dcgm_repo }}
   pullPolicy: IfNotPresent
-  tag: 2.1.8-2.4.0-rc.3-ubuntu18.04
+  tag: 3.3.9-3.6.1-ubuntu22.04
 
 resources:
   limits:
     cpu: {{ monitoring.gpu.nvidia_dcgm_exporter.resources.limits.cpu | default("100m") }}
-    memory: {{ monitoring.gpu.nvidia_dcgm_exporter.resources.limits.memory | default("128Mi") }}
+    memory: {{ monitoring.gpu.nvidia_dcgm_exporter.resources.limits.memory | default("512Mi") }}
   requests:
     cpu: {{ monitoring.gpu.nvidia_dcgm_exporter.resources.requests.cpu | default("100m") }}
-    memory: {{ monitoring.gpu.nvidia_dcgm_exporter.resources.requests.memory | default("128Mi") }}
+    memory: {{ monitoring.gpu.nvidia_dcgm_exporter.resources.requests.memory | default("512Mi") }}
 
 imagePullSecrets: []
 
@@ -30,4 +30,12 @@ affinity:
       - matchExpressions:
         - key: nvidia.com/gpu.present
           operator: Exists
+
+# Enable pod labels to include pod-level GPU metrics (namespace, pod_name, etc.)
+# Note: This requires dcgm-exporter to query Kubernetes API for pod information,
+# which may cause API throttling in large clusters. The ClusterRole we created
+# earlier provides the necessary permissions.
+extraEnv:
+  - name: DCGM_EXPORTER_KUBERNETES_ENABLE_POD_LABELS
+    value: "true"
 
