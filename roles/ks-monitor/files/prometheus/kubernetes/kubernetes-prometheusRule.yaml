@@ -13,15 +13,15 @@ spec:
   - name: k8s.rules
     rules:
     - expr: |
-        sum (irate(container_cpu_usage_seconds_total{job="kubelet", image!="", container!=""}[5m]) * on(namespace, cluster) group_left(workspace) kube_namespace_labels{job="kube-state-metrics"}) by (namespace, workspace, cluster)
+        sum (irate(container_cpu_usage_seconds_total{job="kubelet", pod!=""}[5m]) * on(namespace, cluster) group_left(workspace) kube_namespace_labels{job="kube-state-metrics"}) by (namespace, workspace, cluster)
         or on(namespace, workspace, cluster) max by(namespace, workspace, cluster) (kube_namespace_labels * 0)
       record: namespace:container_cpu_usage_seconds_total:sum_rate
     - expr: |
-        sum(container_memory_usage_bytes{job="kubelet", image!="", container!=""} * on(namespace, cluster) group_left(workspace) kube_namespace_labels{job="kube-state-metrics"}) by (namespace, workspace, cluster)
+        sum(container_memory_usage_bytes{job="kubelet", pod!=""} * on(namespace, cluster) group_left(workspace) kube_namespace_labels{job="kube-state-metrics"}) by (namespace, workspace, cluster)
         or on(namespace, workspace, cluster) max by(namespace, workspace, cluster) (kube_namespace_labels * 0)
       record: namespace:container_memory_usage_bytes:sum
     - expr: |
-        sum(container_memory_working_set_bytes{job="kubelet", image!="", container!=""} * on(namespace, cluster) group_left(workspace) kube_namespace_labels{job="kube-state-metrics"}) by (namespace, workspace, cluster)
+        sum(container_memory_working_set_bytes{job="kubelet", pod!=""} * on(namespace, cluster) group_left(workspace) kube_namespace_labels{job="kube-state-metrics"}) by (namespace, workspace, cluster)
         or on(namespace, workspace, cluster) max by(namespace, workspace, cluster) (kube_namespace_labels * 0)
       record: namespace:container_memory_usage_bytes_wo_cache:sum
     - expr: |
@@ -232,13 +232,13 @@ spec:
         max(kube_resourcequota{job="kube-state-metrics", type="used"}) by (resource, namespace, cluster) / min(kube_resourcequota{job="kube-state-metrics", type="hard"}) by (resource, namespace, cluster) *  on (namespace, cluster) group_left(workspace) (kube_namespace_labels{job="kube-state-metrics"})
       record: namespace:resourcequota_used:ratio
     - expr: |
-        sum (label_replace(label_join(sum(irate(container_cpu_usage_seconds_total{job="kubelet", pod!="", image!=""}[5m])) by (namespace, pod, cluster) * on (pod, namespace, cluster) group_left(owner_kind,owner_name) label_replace(label_join(label_replace(label_replace(kube_pod_owner{job="kube-state-metrics"},"owner_kind", "Deployment", "owner_kind", "ReplicaSet"), "owner_kind", "Pod", "owner_kind", "<none>"),"tmp",":","owner_name","pod"),"owner_name","$1","tmp","<none>:(.*)"), "workload",":","owner_kind","owner_name"), "workload","$1","workload","(Deployment:.+)-(.+)")) by (namespace, workload, owner_kind, cluster)
+        sum (label_replace(label_join(sum(irate(container_cpu_usage_seconds_total{job="kubelet", pod!=""}[5m])) by (namespace, pod, cluster) * on (pod, namespace, cluster) group_left(owner_kind,owner_name) label_replace(label_join(label_replace(label_replace(kube_pod_owner{job="kube-state-metrics"},"owner_kind", "Deployment", "owner_kind", "ReplicaSet"), "owner_kind", "Pod", "owner_kind", "<none>"),"tmp",":","owner_name","pod"),"owner_name","$1","tmp","<none>:(.*)"), "workload",":","owner_kind","owner_name"), "workload","$1","workload","(Deployment:.+)-(.+)")) by (namespace, workload, owner_kind, cluster)
       record: namespace:workload_cpu_usage:sum
     - expr: |
-        sum (label_replace(label_join(sum(container_memory_usage_bytes{job="kubelet", pod!="", image!=""}) by (namespace, pod, cluster) * on (pod, namespace, cluster) group_left(owner_kind,owner_name) label_replace(label_join(label_replace(label_replace(kube_pod_owner{job="kube-state-metrics"},"owner_kind", "Deployment", "owner_kind", "ReplicaSet"), "owner_kind", "Pod", "owner_kind", "<none>"),"tmp",":","owner_name","pod"),"owner_name","$1","tmp","<none>:(.*)"), "workload",":","owner_kind","owner_name"), "workload","$1","workload","(Deployment:.+)-(.+)")) by (namespace, workload, owner_kind, cluster)
+        sum (label_replace(label_join(sum(container_memory_usage_bytes{job="kubelet", pod!=""}) by (namespace, pod, cluster) * on (pod, namespace, cluster) group_left(owner_kind,owner_name) label_replace(label_join(label_replace(label_replace(kube_pod_owner{job="kube-state-metrics"},"owner_kind", "Deployment", "owner_kind", "ReplicaSet"), "owner_kind", "Pod", "owner_kind", "<none>"),"tmp",":","owner_name","pod"),"owner_name","$1","tmp","<none>:(.*)"), "workload",":","owner_kind","owner_name"), "workload","$1","workload","(Deployment:.+)-(.+)")) by (namespace, workload, owner_kind, cluster)
       record: namespace:workload_memory_usage:sum
     - expr: |
-        sum (label_replace(label_join(sum(container_memory_working_set_bytes{job="kubelet", pod!="", image!=""}) by (namespace, pod, cluster) * on (pod, namespace, cluster) group_left(owner_kind,owner_name) label_replace(label_join(label_replace(label_replace(kube_pod_owner{job="kube-state-metrics"},"owner_kind", "Deployment", "owner_kind", "ReplicaSet"), "owner_kind", "Pod", "owner_kind", "<none>"),"tmp",":","owner_name","pod"),"owner_name","$1","tmp","<none>:(.*)"), "workload",":","owner_kind","owner_name"), "workload","$1","workload","(Deployment:.+)-(.+)")) by (namespace, workload, owner_kind, cluster)
+        sum (label_replace(label_join(sum(container_memory_working_set_bytes{job="kubelet", pod!=""}) by (namespace, pod, cluster) * on (pod, namespace, cluster) group_left(owner_kind,owner_name) label_replace(label_join(label_replace(label_replace(kube_pod_owner{job="kube-state-metrics"},"owner_kind", "Deployment", "owner_kind", "ReplicaSet"), "owner_kind", "Pod", "owner_kind", "<none>"),"tmp",":","owner_name","pod"),"owner_name","$1","tmp","<none>:(.*)"), "workload",":","owner_kind","owner_name"), "workload","$1","workload","(Deployment:.+)-(.+)")) by (namespace, workload, owner_kind, cluster)
       record: namespace:workload_memory_usage_wo_cache:sum
     - expr: |
         sum (label_replace(label_join(sum(irate(container_network_transmit_bytes_total{pod!="", interface!~"^(cali.+|tunl.+|dummy.+|kube.+|flannel.+|cni.+|docker.+|veth.+|lo.*)", job="kubelet"}[5m])) by (namespace, pod, cluster) * on (pod, namespace, cluster) group_left(owner_kind,owner_name) label_replace(label_join(label_replace(label_replace(kube_pod_owner{job="kube-state-metrics"},"owner_kind", "Deployment", "owner_kind", "ReplicaSet"), "owner_kind", "Pod", "owner_kind", "<none>"),"tmp",":","owner_name","pod"),"owner_name","$1","tmp","<none>:(.*)"), "workload",":","owner_kind","owner_name"), "workload","$1","workload","(Deployment:.+)-(.+)")) by (namespace, workload, owner_kind, cluster)
