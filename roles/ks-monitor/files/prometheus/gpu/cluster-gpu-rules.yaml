@@ -102,6 +102,22 @@ spec:
           namespace:workload:gpu_memory_usage:bytes{owner_kind="StatefulSet"}
         )
     
+    # Workspace 级别 - GPU 使用量（聚合所有厂商）
+    - record: workspace:gpu_usage:count
+      expr: |
+        sum by (workspace, vendor) (
+          namespace:gpu_usage:count
+          * on(namespace) group_left(workspace) kube_namespace_labels
+        )
+    
+    # Workspace 级别 - GPU 显存使用量（聚合所有厂商）
+    - record: workspace:gpu_memory_usage:bytes
+      expr: |
+        sum by (workspace, vendor) (
+          namespace:gpu_memory_usage:bytes
+          * on(namespace) group_left(workspace) kube_namespace_labels
+        )
+    
     # 集群级别 - GPU 利用率（所有 vendor 的平均）
     - record: cluster:gpu_utilization:ratio
       expr: |
