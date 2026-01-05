@@ -13,6 +13,7 @@ metadata:
 spec:
   groups:
   # NVIDIA GPU Rules - 统一指标名称，添加 vendor="nvidia" 标签
+  # 注意：NVIDIA DCGM 有 Hostname 标签，但为了与其他厂商统一，只使用 node 标签
   - name: nvidia-gpu.rules
     interval: 1m
     rules:
@@ -20,7 +21,7 @@ spec:
     - record: node:gpu_memory_usage:bytes
       expr: |
         label_replace(
-          (sum(DCGM_FI_DEV_FB_USED * 1024 * 1024) by (node, Hostname) or vector(0)),
+          (sum(DCGM_FI_DEV_FB_USED * 1024 * 1024) by (node) or vector(0)),
           "vendor", "nvidia", "", ""
         )
       labels:
@@ -30,7 +31,7 @@ spec:
     - record: node:gpu_memory_total:bytes
       expr: |
         label_replace(
-          (sum(DCGM_FI_DEV_FB_TOTAL * 1024 * 1024) by (node, Hostname) or vector(0)),
+          (sum(DCGM_FI_DEV_FB_TOTAL * 1024 * 1024) by (node) or vector(0)),
           "vendor", "nvidia", "", ""
         )
       labels:
@@ -40,7 +41,7 @@ spec:
     - record: node:gpu_total:count
       expr: |
         label_replace(
-          (count(DCGM_FI_DEV_GPU_UTIL) by (node, Hostname) or vector(0)),
+          (count(DCGM_FI_DEV_GPU_UTIL) by (node) or vector(0)),
           "vendor", "nvidia", "", ""
         )
       labels:
@@ -50,7 +51,7 @@ spec:
     - record: node:gpu_usage:count
       expr: |
         label_replace(
-          ((sum(DCGM_FI_DEV_GPU_UTIL) by (node, Hostname) or vector(0)) / 100),
+          ((sum(DCGM_FI_DEV_GPU_UTIL) by (node) or vector(0)) / 100),
           "vendor", "nvidia", "", ""
         )
       labels:
@@ -80,7 +81,7 @@ spec:
     - record: node:gpu_usage:count
       expr: |
         label_replace(
-          ((sum(npu_chip_info_utilization_rate) by (node, Hostname) or vector(0)) / 100),
+          ((sum(npu_chip_info_utilization_rate) by (node) or vector(0)) / 100),
           "vendor", "ascend", "", ""
         )
       labels:
@@ -90,7 +91,7 @@ spec:
     - record: node:gpu_memory_usage:bytes
       expr: |
         label_replace(
-          (sum(npu_chip_info_hbm_used_memory) by (node, Hostname) or vector(0)),
+          (sum(npu_chip_info_hbm_used_memory) by (node) or vector(0)),
           "vendor", "ascend", "", ""
         )
       labels:
@@ -100,7 +101,7 @@ spec:
     - record: node:gpu_memory_total:bytes
       expr: |
         label_replace(
-          (sum(npu_chip_info_hbm_total_memory) by (node, Hostname) or vector(0)),
+          (sum(npu_chip_info_hbm_total_memory) by (node) or vector(0)),
           "vendor", "ascend", "", ""
         )
       labels:
@@ -110,7 +111,7 @@ spec:
     - record: node:gpu_total:count
       expr: |
         label_replace(
-          (count(npu_chip_info_utilization_rate) by (node, Hostname) or vector(0)),
+          (count(npu_chip_info_utilization_rate) by (node) or vector(0)),
           "vendor", "ascend", "", ""
         )
       labels:
@@ -135,10 +136,11 @@ spec:
     interval: 1m
     rules:
     # 节点级别 - GPU 使用量（基于利用率计算）
+    # 注意：MLU 指标只有 node 标签，没有 Hostname 标签（与 node 重复）
     - record: node:gpu_usage:count
       expr: |
         label_replace(
-          ((sum(mlu_utilization) by (node, Hostname) or vector(0)) / 100),
+          ((sum(mlu_utilization) by (node) or vector(0)) / 100),
           "vendor", "cambricon", "", ""
         )
       labels:
@@ -148,7 +150,7 @@ spec:
     - record: node:gpu_memory_usage:bytes
       expr: |
         label_replace(
-          (sum(mlu_memory_used * 1024 * 1024) by (node, Hostname) or vector(0)),
+          (sum(mlu_memory_used) by (node) or vector(0)),
           "vendor", "cambricon", "", ""
         )
       labels:
@@ -158,7 +160,7 @@ spec:
     - record: node:gpu_memory_total:bytes
       expr: |
         label_replace(
-          (sum(mlu_memory_total * 1024 * 1024) by (node, Hostname) or vector(0)),
+          (sum(mlu_memory_total) by (node) or vector(0)),
           "vendor", "cambricon", "", ""
         )
       labels:
@@ -168,7 +170,7 @@ spec:
     - record: node:gpu_total:count
       expr: |
         label_replace(
-          (count(mlu_utilization) by (node, Hostname) or vector(0)),
+          (count(mlu_utilization) by (node) or vector(0)),
           "vendor", "cambricon", "", ""
         )
       labels:
@@ -196,7 +198,7 @@ spec:
     - record: node:gpu_usage:count
       expr: |
         label_replace(
-          ((sum(dcu_utilizationrate) by (node, Hostname) or vector(0)) / 100),
+          ((sum(dcu_utilizationrate) by (node) or vector(0)) / 100),
           "vendor", "hygon", "", ""
         )
       labels:
@@ -206,7 +208,7 @@ spec:
     - record: node:gpu_memory_usage:bytes
       expr: |
         label_replace(
-          (sum(dcu_usedmemory_bytes) by (node, Hostname) or vector(0)),
+          (sum(dcu_usedmemory_bytes) by (node) or vector(0)),
           "vendor", "hygon", "", ""
         )
       labels:
@@ -216,7 +218,7 @@ spec:
     - record: node:gpu_memory_total:bytes
       expr: |
         label_replace(
-          (sum(dcu_memorycap_bytes) by (node, Hostname) or vector(0)),
+          (sum(dcu_memorycap_bytes) by (node) or vector(0)),
           "vendor", "hygon", "", ""
         )
       labels:
@@ -226,7 +228,7 @@ spec:
     - record: node:gpu_total:count
       expr: |
         label_replace(
-          (count(dcu_utilizationrate) by (node, Hostname) or vector(0)),
+          (count(dcu_utilizationrate) by (node) or vector(0)),
           "vendor", "hygon", "", ""
         )
       labels:
@@ -254,7 +256,7 @@ spec:
     - record: node:gpu_usage:count
       expr: |
         label_replace(
-          ((sum(mx_gpu_usage) by (node, Hostname) or vector(0)) / 100),
+          ((sum(mx_gpu_usage) by (node) or vector(0)) / 100),
           "vendor", "metax", "", ""
         )
       labels:
@@ -264,7 +266,7 @@ spec:
     - record: node:gpu_memory_usage:bytes
       expr: |
         label_replace(
-          (sum(mx_memory_used{type="vram"} * 1024) by (node, Hostname) or vector(0)),
+          (sum(mx_memory_used{type="vram"} * 1024) by (node) or vector(0)),
           "vendor", "metax", "", ""
         )
       labels:
@@ -274,7 +276,7 @@ spec:
     - record: node:gpu_memory_total:bytes
       expr: |
         label_replace(
-          (sum(mx_memory_total{type="vram"} * 1024) by (node, Hostname) or vector(0)),
+          (sum(mx_memory_total{type="vram"} * 1024) by (node) or vector(0)),
           "vendor", "metax", "", ""
         )
       labels:
@@ -284,7 +286,7 @@ spec:
     - record: node:gpu_total:count
       expr: |
         label_replace(
-          (count(mx_gpu_usage) by (node, Hostname) or vector(0)),
+          (count(mx_gpu_usage) by (node) or vector(0)),
           "vendor", "metax", "", ""
         )
       labels:
@@ -312,7 +314,7 @@ spec:
     - record: node:gpu_usage:count
       expr: |
         label_replace(
-          ((sum(ix_gpu_utilization) by (node, Hostname) or vector(0)) / 100),
+          ((sum(ix_gpu_utilization) by (node) or vector(0)) / 100),
           "vendor", "iluvatar", "", ""
         )
       labels:
@@ -322,7 +324,7 @@ spec:
     - record: node:gpu_memory_usage:bytes
       expr: |
         label_replace(
-          (sum(ix_mem_used * 1024 * 1024) by (node, Hostname) or vector(0)),
+          (sum(ix_mem_used * 1024 * 1024) by (node) or vector(0)),
           "vendor", "iluvatar", "", ""
         )
       labels:
@@ -332,7 +334,7 @@ spec:
     - record: node:gpu_memory_total:bytes
       expr: |
         label_replace(
-          (sum(ix_mem_total * 1024 * 1024) by (node, Hostname) or vector(0)),
+          (sum(ix_mem_total * 1024 * 1024) by (node) or vector(0)),
           "vendor", "iluvatar", "", ""
         )
       labels:
@@ -342,7 +344,7 @@ spec:
     - record: node:gpu_total:count
       expr: |
         label_replace(
-          (count(ix_gpu_utilization) by (node, Hostname) or vector(0)),
+          (count(ix_gpu_utilization) by (node) or vector(0)),
           "vendor", "iluvatar", "", ""
         )
       labels:
@@ -370,7 +372,7 @@ spec:
     - record: node:gpu_usage:count
       expr: |
         label_replace(
-          ((sum(enflame_gcu_sip_usage) by (node, Hostname) or vector(0)) / 100),
+          ((sum(enflame_gcu_sip_usage) by (node) or vector(0)) / 100),
           "vendor", "enflame", "", ""
         )
       labels:
@@ -380,7 +382,7 @@ spec:
     - record: node:gpu_memory_usage:bytes
       expr: |
         label_replace(
-          (sum(enflame_gcu_memory_used_bytes) by (node, Hostname) or vector(0)),
+          (sum(enflame_gcu_memory_used_bytes) by (node) or vector(0)),
           "vendor", "enflame", "", ""
         )
       labels:
@@ -390,7 +392,7 @@ spec:
     - record: node:gpu_memory_total:bytes
       expr: |
         label_replace(
-          (sum(enflame_gcu_memory_total_bytes) by (node, Hostname) or vector(0)),
+          (sum(enflame_gcu_memory_total_bytes) by (node) or vector(0)),
           "vendor", "enflame", "", ""
         )
       labels:
@@ -400,7 +402,7 @@ spec:
     - record: node:gpu_total:count
       expr: |
         label_replace(
-          (count(enflame_gcu_sip_usage) by (node, Hostname) or vector(0)),
+          (count(enflame_gcu_sip_usage) by (node) or vector(0)),
           "vendor", "enflame", "", ""
         )
       labels:
@@ -428,7 +430,7 @@ spec:
     - record: node:gpu_usage:count
       expr: |
         label_replace(
-          ((sum(node_xpu_utilization) by (node, Hostname) or vector(0)) / 100),
+          ((sum(node_xpu_utilization) by (node) or vector(0)) / 100),
           "vendor", "kunlunxin", "", ""
         )
       labels:
@@ -438,7 +440,7 @@ spec:
     - record: node:gpu_memory_usage:bytes
       expr: |
         label_replace(
-          (sum(node_xpu_memused * 1024 * 1024) by (node, Hostname) or vector(0)),
+          (sum(node_xpu_memused * 1024 * 1024) by (node) or vector(0)),
           "vendor", "kunlunxin", "", ""
         )
       labels:
@@ -448,7 +450,7 @@ spec:
     - record: node:gpu_memory_total:bytes
       expr: |
         label_replace(
-          (sum(node_xpu_memtotal * 1024 * 1024) by (node, Hostname) or vector(0)),
+          (sum(node_xpu_memtotal * 1024 * 1024) by (node) or vector(0)),
           "vendor", "kunlunxin", "", ""
         )
       labels:
@@ -458,7 +460,7 @@ spec:
     - record: node:gpu_total:count
       expr: |
         label_replace(
-          (count(node_xpu_utilization) by (node, Hostname) or vector(0)),
+          (count(node_xpu_utilization) by (node) or vector(0)),
           "vendor", "kunlunxin", "", ""
         )
       labels:
@@ -487,7 +489,7 @@ spec:
     - record: node:gpu_usage:count
       expr: |
         label_replace(
-          ((sum(DCGM_FI_DEV_GPU_UTIL{job=~".*alibaba.*|.*ppu.*"}) by (node, Hostname) or vector(0)) / 100),
+          ((sum(DCGM_FI_DEV_GPU_UTIL{job=~".*alibaba.*|.*ppu.*"}) by (node) or vector(0)) / 100),
           "vendor", "alibaba", "", ""
         )
       labels:
@@ -497,7 +499,7 @@ spec:
     - record: node:gpu_memory_usage:bytes
       expr: |
         label_replace(
-          (sum(DCGM_FI_DEV_FB_USED{job=~".*alibaba.*|.*ppu.*"} * 1024 * 1024) by (node, Hostname) or vector(0)),
+          (sum(DCGM_FI_DEV_FB_USED{job=~".*alibaba.*|.*ppu.*"} * 1024 * 1024) by (node) or vector(0)),
           "vendor", "alibaba", "", ""
         )
       labels:
@@ -507,7 +509,7 @@ spec:
     - record: node:gpu_memory_total:bytes
       expr: |
         label_replace(
-          (sum(DCGM_CUSTOM_DEV_FB_TOTAL{job=~".*alibaba.*|.*ppu.*"} * 1024 * 1024) by (node, Hostname) or vector(0)),
+          (sum(DCGM_CUSTOM_DEV_FB_TOTAL{job=~".*alibaba.*|.*ppu.*"} * 1024 * 1024) by (node) or vector(0)),
           "vendor", "alibaba", "", ""
         )
       labels:
@@ -517,7 +519,7 @@ spec:
     - record: node:gpu_total:count
       expr: |
         label_replace(
-          (count(DCGM_FI_DEV_GPU_UTIL{job=~".*alibaba.*|.*ppu.*"}) by (node, Hostname) or vector(0)),
+          (count(DCGM_FI_DEV_GPU_UTIL{job=~".*alibaba.*|.*ppu.*"}) by (node) or vector(0)),
           "vendor", "alibaba", "", ""
         )
       labels:
