@@ -76,7 +76,7 @@ spec:
     - record: container:gpu_usage:count
       expr: |
         sum by (namespace, pod, container) (
-          (mlu_utilization / 100) * on(uuid) group_right() mlu_container
+          (mlu_utilization / 100) * on(uuid, vf) group_right() mlu_container
         )
       labels:
         vendor: cambricon
