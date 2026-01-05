@@ -1,0 +1,73 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/component: prometheus
+    app.kubernetes.io/instance: k8s
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: kube-prometheus
+    prometheus: k8s
+    role: alert-rules
+  name: alibaba-ppu-k8s-rules
+  namespace: kubesphere-monitoring-system
+spec:
+  groups:
+  # Alibaba PPU Rules - 统一指标名称，添加 vendor="alibaba" 标签，节点聚合
+  # 注意：Alibaba PPU 使用与 NVIDIA 相同的 DCGM 指标
+  - name: alibaba-ppu.rules
+    interval: 1m
+    rules:
+    # 节点级别 - GPU 使用量（基于利用率计算）
+    - record: node:gpu_usage:count
+      expr: |
+        label_replace(
+          ((sum(DCGM_FI_DEV_GPU_UTIL{job=~".*alibaba.*|.*ppu.*"}) by (node) or vector(0)) / 100),
+          "vendor", "alibaba", "", ""
+        )
+      labels:
+        vendor: alibaba
+    
+    # 节点级别 - GPU 显存使用量（统一名称，bytes，节点聚合）
+    - record: node:gpu_memory_usage:bytes
+      expr: |
+        label_replace(
+          (sum(DCGM_FI_DEV_FB_USED{job=~".*alibaba.*|.*ppu.*"} * 1024 * 1024) by (node) or vector(0)),
+          "vendor", "alibaba", "", ""
+        )
+      labels:
+        vendor: alibaba
+    
+    # 节点级别 - GPU 显存总量（统一名称，bytes，节点聚合）
+    - record: node:gpu_memory_total:bytes
+      expr: |
+        label_replace(
+          (sum(DCGM_CUSTOM_DEV_FB_TOTAL{job=~".*alibaba.*|.*ppu.*"} * 1024 * 1024) by (node) or vector(0)),
+          "vendor", "alibaba", "", ""
+        )
+      labels:
+        vendor: alibaba
+    
+    # 节点级别 - GPU 总数（统一名称，按型号统计）
+    - record: node:gpu_total:count
+      expr: |
+        label_replace(
+          (count(DCGM_FI_DEV_GPU_UTIL{job=~".*alibaba.*|.*ppu.*"}) by (node) or vector(0)),
+          "vendor", "alibaba", "", ""
+        )
+      labels:
+        vendor: alibaba
+    
+    # 节点级别 - Alibaba PPU 分配量（基于 kube-state-metrics）
+    - record: node:gpu_allocated:count
+      expr: |
+        label_replace(
+          (sum by (node) (
+            kube_pod_container_resource_requests{resource="alibaba_com_ppu", unit="integer"}
+            * on (namespace, pod, uid) group_left(node) (kube_pod_info{node!=""})
+            * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} > 0)
+          ) or vector(0)),
+          "vendor", "alibaba", "", ""
+        )
+      labels:
+        vendor: alibaba
+

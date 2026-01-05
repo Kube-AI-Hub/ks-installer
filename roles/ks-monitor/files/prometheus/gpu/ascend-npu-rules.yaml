@@ -1,0 +1,72 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/component: prometheus
+    app.kubernetes.io/instance: k8s
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: kube-prometheus
+    prometheus: k8s
+    role: alert-rules
+  name: ascend-npu-k8s-rules
+  namespace: kubesphere-monitoring-system
+spec:
+  groups:
+  # Ascend NPU Rules - 统一指标名称，添加 vendor="ascend" 标签
+  - name: ascend-npu.rules
+    interval: 1m
+    rules:
+    # 节点级别 - GPU 使用量（基于利用率计算，节点聚合）
+    - record: node:gpu_usage:count
+      expr: |
+        label_replace(
+          ((sum(npu_chip_info_utilization_rate) by (node) or vector(0)) / 100),
+          "vendor", "ascend", "", ""
+        )
+      labels:
+        vendor: ascend
+    
+    # 节点级别 - GPU 显存使用量（统一名称，bytes，节点聚合）
+    - record: node:gpu_memory_usage:bytes
+      expr: |
+        label_replace(
+          (sum(npu_chip_info_hbm_used_memory) by (node) or vector(0)),
+          "vendor", "ascend", "", ""
+        )
+      labels:
+        vendor: ascend
+    
+    # 节点级别 - GPU 显存总量（统一名称，bytes，节点聚合）
+    - record: node:gpu_memory_total:bytes
+      expr: |
+        label_replace(
+          (sum(npu_chip_info_hbm_total_memory) by (node) or vector(0)),
+          "vendor", "ascend", "", ""
+        )
+      labels:
+        vendor: ascend
+    
+    # 节点级别 - GPU 总数（统一名称，节点聚合）
+    - record: node:gpu_total:count
+      expr: |
+        label_replace(
+          (count(npu_chip_info_utilization_rate) by (node) or vector(0)),
+          "vendor", "ascend", "", ""
+        )
+      labels:
+        vendor: ascend
+    
+    # 节点级别 - Ascend NPU 分配量（基于 kube-state-metrics）
+    - record: node:gpu_allocated:count
+      expr: |
+        label_replace(
+          (sum by (node) (
+            kube_pod_container_resource_requests{resource="huawei_com_Ascend910", unit="integer"}
+            * on (namespace, pod, uid) group_left(node) (kube_pod_info{node!=""})
+            * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} > 0)
+          ) or vector(0)),
+          "vendor", "ascend", "", ""
+        )
+      labels:
+        vendor: ascend
+

@@ -1,0 +1,48 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/component: prometheus
+    app.kubernetes.io/instance: k8s
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: kube-prometheus
+    prometheus: k8s
+    role: alert-rules
+  name: cluster-gpu-k8s-rules
+  namespace: kubesphere-monitoring-system
+spec:
+  groups:
+  # 集群级别聚合规则 - 自动聚合所有 vendor
+  - name: cluster-gpu.rules
+    interval: 1m
+    rules:
+    # 集群级别 - GPU 利用率（所有 vendor 的平均）
+    - record: cluster:gpu_utilization:ratio
+      expr: |
+        (sum(node:gpu_usage:count) or vector(0)) / (sum(node:gpu_total:count) or vector(1))
+    
+    # 集群级别 - GPU 使用量（所有 vendor 的总和）
+    - record: cluster:gpu_usage:count
+      expr: |
+        sum(node:gpu_usage:count) or vector(0)
+    
+    # 集群级别 - GPU 总数（所有 vendor 的总和）
+    - record: cluster:gpu_total:count
+      expr: |
+        sum(node:gpu_total:count) or vector(0)
+    
+    # 集群级别 - GPU 显存使用量（所有 vendor 的总和）
+    - record: cluster:gpu_memory_usage:bytes
+      expr: |
+        sum(node:gpu_memory_usage:bytes) or vector(0)
+    
+    # 集群级别 - GPU 显存总量（所有 vendor 的总和）
+    - record: cluster:gpu_memory_total:bytes
+      expr: |
+        sum(node:gpu_memory_total:bytes) or vector(0)
+    
+    # 集群级别 - GPU 分配量（所有 vendor 的总和）
+    - record: cluster:gpu_allocated:count
+      expr: |
+        sum(node:gpu_allocated:count) or vector(0)
+
