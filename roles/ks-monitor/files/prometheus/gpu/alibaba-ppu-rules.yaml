@@ -57,16 +57,12 @@ spec:
       labels:
         vendor: alibaba
     
-    # 节点级别 - Alibaba PPU 分配量（基于 kube-state-metrics）
-    - record: node:gpu_allocated:count
+    # 容器级别 - GPU 分配量
+    - record: container:gpu_allocated:count
       expr: |
-        label_replace(
-          (sum by (node) (
-            kube_pod_container_resource_requests{resource="alibaba_com_ppu", unit="integer"}
-            * on (namespace, pod, uid) group_left(node) (kube_pod_info{node!=""})
-            * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} > 0)
-          ) or vector(0)),
-          "vendor", "alibaba", "", ""
+        sum by (namespace, pod, container) (
+          kube_pod_container_resource_requests{resource="alibaba_com_ppu", unit="integer"}
+          * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} > 0)
         )
       labels:
         vendor: alibaba

@@ -30,6 +30,13 @@ spec:
           container:gpu_memory_usage:bytes
         )
     
+    # POD 级别 - GPU 分配量（聚合所有厂商）
+    - record: pod:gpu_allocated:count
+      expr: |
+        sum by (namespace, pod, vendor) (
+          container:gpu_allocated:count
+        )
+    
     # Namespace 级别 - GPU 使用量（聚合所有厂商）
     - record: namespace:gpu_usage:count
       expr: |
@@ -42,6 +49,13 @@ spec:
       expr: |
         sum by (namespace, vendor) (
           pod:gpu_memory_usage:bytes
+        )
+    
+    # Namespace 级别 - GPU 分配量（聚合所有厂商）
+    - record: namespace:gpu_allocated:count
+      expr: |
+        sum by (namespace, vendor) (
+          pod:gpu_allocated:count
         )
     
     # Workload 级别 - GPU 使用量（聚合所有厂商）
@@ -60,6 +74,14 @@ spec:
           * on(namespace, pod) group_left(owner_kind, owner_name) kube_pod_owner
         )
     
+    # Workload 级别 - GPU 分配量（聚合所有厂商）
+    - record: namespace:workload:gpu_allocated:count
+      expr: |
+        sum by (namespace, owner_kind, owner_name, vendor) (
+          pod:gpu_allocated:count
+          * on(namespace, pod) group_left(owner_kind, owner_name) kube_pod_owner
+        )
+    
     # Deployment 级别 - GPU 使用量
     - record: namespace:deployment:gpu_usage:count
       expr: |
@@ -72,6 +94,13 @@ spec:
       expr: |
         sum by (namespace, owner_name, vendor) (
           namespace:workload:gpu_memory_usage:bytes{owner_kind="Deployment"}
+        )
+    
+    # Deployment 级别 - GPU 分配量
+    - record: namespace:deployment:gpu_allocated:count
+      expr: |
+        sum by (namespace, owner_name, vendor) (
+          namespace:workload:gpu_allocated:count{owner_kind="Deployment"}
         )
     
     # DaemonSet 级别 - GPU 使用量
@@ -88,6 +117,13 @@ spec:
           namespace:workload:gpu_memory_usage:bytes{owner_kind="DaemonSet"}
         )
     
+    # DaemonSet 级别 - GPU 分配量
+    - record: namespace:daemonset:gpu_allocated:count
+      expr: |
+        sum by (namespace, owner_name, vendor) (
+          namespace:workload:gpu_allocated:count{owner_kind="DaemonSet"}
+        )
+    
     # StatefulSet 级别 - GPU 使用量
     - record: namespace:statefulset:gpu_usage:count
       expr: |
@@ -100,6 +136,13 @@ spec:
       expr: |
         sum by (namespace, owner_name, vendor) (
           namespace:workload:gpu_memory_usage:bytes{owner_kind="StatefulSet"}
+        )
+    
+    # StatefulSet 级别 - GPU 分配量
+    - record: namespace:statefulset:gpu_allocated:count
+      expr: |
+        sum by (namespace, owner_name, vendor) (
+          namespace:workload:gpu_allocated:count{owner_kind="StatefulSet"}
         )
     
     # Workspace 级别 - GPU 使用量（聚合所有厂商）
@@ -116,6 +159,22 @@ spec:
         sum by (workspace, vendor) (
           namespace:gpu_memory_usage:bytes
           * on(namespace) group_left(workspace) kube_namespace_labels
+        )
+    
+    # Workspace 级别 - GPU 分配量（聚合所有厂商）
+    - record: workspace:gpu_allocated:count
+      expr: |
+        sum by (workspace, vendor) (
+          namespace:gpu_allocated:count
+          * on(namespace) group_left(workspace) kube_namespace_labels
+        )
+    
+    # 节点级别 - GPU 分配量（从容器级别聚合）
+    - record: node:gpu_allocated:count
+      expr: |
+        sum by (node, vendor) (
+          container:gpu_allocated:count
+          * on(namespace, pod) group_left(node) kube_pod_info{node!=""}
         )
     
     # 集群级别 - GPU 利用率（所有 vendor 的平均）
