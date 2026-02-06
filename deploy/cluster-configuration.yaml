@@ -51,9 +51,162 @@ spec:
         enabled: true
     gpu:                 # Install GPUKinds. The default GPU kind is nvidia.com/gpu. Other GPU kinds can be added here according to your needs.
       kinds:
-      - resourceName: "nvidia.com/gpu"
-        resourceType: "GPU"
-        default: true
+        # NVIDIA 物理GPU
+        - resourceName: nvidia.com/gpu
+          resourceType: GPU
+          default: True
+          memoryUnit: Mi
+
+        # NVIDIA 虚拟GPU
+        - resourceName: nvidia.com/vgpu
+          resourceType: GPU
+          default: False
+          memoryUnit: Mi
+          memoryName: nvidia.com/gpumem
+          vcoresName: nvidia.com/cores
+
+        # Cambricon MLU370 物理卡
+        - resourceName: cambricon.com/mlu370
+          resourceType: GPU
+          default: False
+          memoryUnit: '*256Mi'
+
+
+        # 昇腾系列虚拟NPU
+        - resourceName: huawei.com/Ascend910A
+          resourceType: GPU
+          default: False
+          memoryUnit: Mi
+          memoryName: huawei.com/Ascend910A-memory
+
+        - resourceName: huawei.com/Ascend310P
+          resourceType: GPU
+          default: False
+          memoryUnit: Mi
+          memoryName: huawei.com/Ascend310P-memory
+
+        - resourceName: huawei.com/Ascend910B
+          resourceType: GPU
+          default: False
+          memoryUnit: Mi
+          memoryName: huawei.com/Ascend910B-memory
+
+        - resourceName: huawei.com/Ascend910B2
+          resourceType: GPU
+          default: False
+          memoryUnit: Mi
+          memoryName: huawei.com/Ascend910B2-memory
+
+        - resourceName: huawei.com/Ascend910B3
+          resourceType: GPU
+          default: False
+          memoryUnit: Mi
+          memoryName: huawei.com/Ascend910B3-memory
+
+        - resourceName: huawei.com/Ascend910B4
+          resourceType: GPU
+          default: False
+          memoryUnit: Mi
+          memoryName: huawei.com/Ascend910B4-memory
+
+        - resourceName: huawei.com/Ascend910B4-1
+          resourceType: GPU
+          default: False
+          memoryUnit: Mi
+          memoryName: huawei.com/Ascend910B4-1-memory
+
+        # 海光DCU虚拟卡
+        - resourceName: hygon.com/dcunum
+          resourceType: GPU
+          default: False
+          memoryUnit: Mi
+          memoryName: hygon.com/dcumem
+          vcoresName: hygon.com/dcucores
+
+        # 天数智芯系列虚拟卡
+        - resourceName: iluvatar.ai/MR-V50-vgpu
+          resourceType: GPU
+          default: False
+          memoryUnit: '*256Mi'
+          memoryName: iluvatar.ai/MR-V50.vMem
+          vcoresName: iluvatar.ai/MR-V50.vCore
+
+        - resourceName: iluvatar.ai/MR-V100-vgpu
+          resourceType: GPU
+          default: False
+          memoryUnit: '*256Mi'
+          memoryName: iluvatar.ai/MR-V100.vMem
+          vcoresName: iluvatar.ai/MR-V100.vCore
+
+        - resourceName: iluvatar.ai/BI-V100-vgpu
+          resourceType: GPU
+          default: False
+          memoryUnit: '*256Mi'
+          memoryName: iluvatar.ai/BI-V100.vMem
+          vcoresName: iluvatar.ai/BI-V100.vCore
+
+        - resourceName: iluvatar.ai/BI-V150-vgpu
+          resourceType: GPU
+          default: False
+          memoryUnit: '*256Mi'
+          memoryName: iluvatar.ai/BI-V150.vMem
+          vcoresName: iluvatar.ai/BI-V150.vCore
+
+        - resourceName: iluvatar.ai/BI-V150S-vgpu
+          resourceType: GPU
+          default: False
+          memoryUnit: '*256Mi'
+          memoryName: iluvatar.ai/BI-V150S.vMem
+          vcoresName: iluvatar.ai/BI-V150S.vCore
+
+        # 沐曦METAX物理卡
+        - resourceName: metax-tech.com/gpu
+          resourceType: GPU
+          default: False
+
+        # 沐曦vMETAX虚拟卡
+        - resourceName: metax-tech.com/sgpu
+          resourceType: GPU
+          default: False
+          memoryUnit: Gi
+          memoryName: metax-tech.com/vmemory
+          vcoresName: metax-tech.com/vcore
+
+        # 燧原GCU物理卡
+        - resourceName: enflame.com/gcu
+          resourceType: GPU
+          default: False
+
+        # 燧原vGCU虚拟卡
+        - resourceName: enflame.com/vgcu
+          resourceType: GPU
+          default: False
+          vcoresName: enflame.com/vgcu-percentage
+
+        # 阿里巴巴PPU物理卡
+        - resourceName: alibabacloud.com/ppu
+          resourceType: GPU
+          default: False
+
+        # 摩尔线程vMTHREADS虚拟卡
+        - resourceName: mthreads.com/vgpu
+          resourceType: GPU
+          default: False
+          memoryUnit: '*512Mi'
+          memoryName: mthreads.com/sgpu-memory
+          vcoresName: mthreads.com/sgpu-core
+
+        # 昆仑芯XPU物理卡
+        - resourceName: kunlunxin.com/xpu
+          resourceType: GPU
+          default: False
+
+        # 昆仑芯vXPU虚拟卡
+        - resourceName: kunlunxin.com/vxpu
+          resourceType: GPU
+          default: False
+          memoryUnit: Mi
+          memoryName: kunlunxin.com/vxpu-memory
     es:   # Storage backend for logging, events and auditing.
       # master:
       #   volumeSize: 4Gi  # The volume size of Elasticsearch master nodes.
