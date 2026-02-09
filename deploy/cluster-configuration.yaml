@@ -72,8 +72,21 @@ spec:
           displayName: "MLU370 - Cambricon/寒武纪"
           resourceType: GPU
           default: False
-          memoryUnit: '*256Mi'
 
+        # Cambricon MLU smlu 虚拟卡
+        - resourceName: cambricon.com/vmlu
+          displayName: "vMLU - Cambricon/寒武纪"
+          resourceType: GPU
+          default: False
+          memoryUnit: '*256Mi'
+          memoryName: cambricon.com/mlu.smlu.vmemory
+          vcoresName: cambricon.com/mlu.smlu.vcore
+
+        # Cambricon MLU370 共享卡
+        - resourceName: cambricon.com/mlu370.share
+          displayName: "sMLU370 - Cambricon/寒武纪"
+          resourceType: GPU
+          default: False
 
         # 昇腾系列虚拟NPU
         - resourceName: huawei.com/Ascend910A
