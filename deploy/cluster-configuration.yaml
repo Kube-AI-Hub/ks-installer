@@ -78,7 +78,7 @@ spec:
           displayName: "vMLU - Cambricon/寒武纪"
           resourceType: GPU
           default: False
-          memoryUnit: '*256Mi'
+          memoryUnit: '%'
           memoryName: cambricon.com/mlu.smlu.vmemory
           vcoresName: cambricon.com/mlu.smlu.vcore
 

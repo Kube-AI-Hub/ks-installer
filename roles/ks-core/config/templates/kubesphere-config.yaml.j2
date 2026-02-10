@@ -141,8 +141,20 @@ data:
 {% for kind in common.gpu.kinds %}
       - resourceName: {{ kind.resourceName }}
         resourceType: {{ kind.resourceType }}
+{% if kind.displayName is defined %}
+        displayName: {{ kind.displayName | tojson }}
+{% endif %}
 {% if kind.default is defined %}
         default: {{ kind.default }}
+{% endif %}
+{% if kind.memoryUnit is defined %}
+        memoryUnit: {{ kind.memoryUnit | tojson }}
+{% endif %}
+{% if kind.memoryName is defined %}
+        memoryName: {{ kind.memoryName | tojson }}
+{% endif %}
+{% if kind.vcoresName is defined %}
+        vcoresName: {{ kind.vcoresName | tojson }}
 {% endif %}
 {% endfor %}
 {% endif %}
