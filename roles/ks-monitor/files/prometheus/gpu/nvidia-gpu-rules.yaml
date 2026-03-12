@@ -12,51 +12,10 @@ metadata:
   namespace: kubesphere-monitoring-system
 spec:
   groups:
-  # NVIDIA GPU Rules - 统一指标名称，添加 vendor="nvidia" 标签
-  # 注意：NVIDIA DCGM 有 Hostname 标签，但为了与其他厂商统一，只使用 node 标签
+  # NVIDIA GPU Rules - 容器级别 GPU 分配量（节点级别指标由 cluster-gpu-rules 统一从 gpu-agent 聚合）
   - name: nvidia-gpu.rules
     interval: 1m
     rules:
-    # 节点级别 - GPU 显存使用量（统一名称，bytes，节点聚合）
-    - record: node:gpu_memory_usage:bytes
-      expr: |
-        label_replace(
-          (sum(DCGM_FI_DEV_FB_USED * 1024 * 1024) by (node) or vector(0)),
-          "vendor", "nvidia", "", ""
-        )
-      labels:
-        vendor: nvidia
-    
-    # 节点级别 - GPU 显存总量（统一名称，bytes，节点聚合）
-    - record: node:gpu_memory_total:bytes
-      expr: |
-        label_replace(
-          (sum(DCGM_FI_DEV_FB_TOTAL * 1024 * 1024) by (node) or vector(0)),
-          "vendor", "nvidia", "", ""
-        )
-      labels:
-        vendor: nvidia
-    
-    # 节点级别 - GPU 总数（统一名称，节点聚合）
-    - record: node:gpu_total:count
-      expr: |
-        label_replace(
-          (count(DCGM_FI_DEV_GPU_UTIL) by (node) or vector(0)),
-          "vendor", "nvidia", "", ""
-        )
-      labels:
-        vendor: nvidia
-    
-    # 节点级别 - NVIDIA GPU 使用量（基于利用率加和计算，节点聚合）
-    - record: node:gpu_usage:count
-      expr: |
-        label_replace(
-          ((sum(DCGM_FI_DEV_GPU_UTIL) by (node) or vector(0)) / 100),
-          "vendor", "nvidia", "", ""
-        )
-      labels:
-        vendor: nvidia
-    
     # 容器级别 - GPU 分配量
     - record: container:gpu_allocated:count
       expr: |
@@ -64,20 +23,5 @@ spec:
           kube_pod_container_resource_requests{resource="nvidia_com_gpu", unit="integer"}
           * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} > 0)
         )
-      labels:
-        vendor: nvidia
-
-    # 节点级别 - GPU 已分配卡数（from gpu-agent allocation rate sum）
-    - record: node:gpu_allocated:count
-      expr: |
-        sum(gpu_agent_card_allocation_rate{vendor="nvidia"}) by (node)
-      labels:
-        vendor: nvidia
-
-    # 节点级别 - GPU 分配率（from gpu-agent）
-    - record: node:gpu_allocation_rate
-      expr: |
-        sum(gpu_agent_card_allocation_rate{vendor="nvidia"}) by (node)
-        / (count(gpu_card_utilisation{vendor="nvidia"}) by (node) > 0)
       labels:
         vendor: nvidia

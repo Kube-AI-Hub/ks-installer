@@ -12,51 +12,10 @@ metadata:
   namespace: kubesphere-monitoring-system
 spec:
   groups:
-  # Cambricon MLU Rules - 统一指标名称，添加 vendor="cambricon" 标签
+  # Cambricon MLU Rules - 容器级别 GPU 使用量/显存/分配量（节点级别指标由 cluster-gpu-rules 统一从 gpu-agent 聚合）
   - name: cambricon-mlu.rules
     interval: 1m
     rules:
-    # 节点级别 - GPU 使用量（基于利用率计算）
-    # 注意：MLU 指标只有 node 标签，没有 Hostname 标签（与 node 重复）
-    - record: node:gpu_usage:count
-      expr: |
-        label_replace(
-          ((sum(mlu_utilization) by (node) or vector(0)) / 100),
-          "vendor", "cambricon", "", ""
-        )
-      labels:
-        vendor: cambricon
-    
-    # 节点级别 - GPU 显存使用量（统一名称，bytes，节点聚合）
-    - record: node:gpu_memory_usage:bytes
-      expr: |
-        label_replace(
-          (sum(mlu_memory_used) by (node) or vector(0)),
-          "vendor", "cambricon", "", ""
-        )
-      labels:
-        vendor: cambricon
-    
-    # 节点级别 - GPU 显存总量（统一名称，bytes，节点聚合）
-    - record: node:gpu_memory_total:bytes
-      expr: |
-        label_replace(
-          (sum(mlu_memory_total) by (node) or vector(0)),
-          "vendor", "cambricon", "", ""
-        )
-      labels:
-        vendor: cambricon
-    
-    # 节点级别 - GPU 总数（统一名称，按型号统计）
-    - record: node:gpu_total:count
-      expr: |
-        label_replace(
-          (count(mlu_utilization) by (node) or vector(0)),
-          "vendor", "cambricon", "", ""
-        )
-      labels:
-        vendor: cambricon
-    
     # 容器级别 - GPU 使用量（基于 podresources collector）
     # 通过 mlu_container 找到对应 MLU 设备的 mlu_utilization
     # 使用 node,mlu,uuid,vf 匹配，避免 dynamic-smlu 下不同卡有相同 (uuid,vf) 导致 duplicate series
@@ -92,20 +51,5 @@ spec:
           kube_pod_container_resource_requests{resource="cambricon_com_mlu", unit="integer"}
           * on (namespace, pod) group_left() (kube_pod_status_phase{phase=~"Pending|Running"} > 0)
         )
-      labels:
-        vendor: cambricon
-
-    # 节点级别 - GPU 已分配卡数（from gpu-agent allocation rate sum）
-    - record: node:gpu_allocated:count
-      expr: |
-        sum(gpu_agent_card_allocation_rate{vendor="cambricon"}) by (node)
-      labels:
-        vendor: cambricon
-
-    # 节点级别 - GPU 分配率（from gpu-agent）
-    - record: node:gpu_allocation_rate
-      expr: |
-        sum(gpu_agent_card_allocation_rate{vendor="cambricon"}) by (node)
-        / (count(gpu_card_utilisation{vendor="cambricon"}) by (node) > 0)
       labels:
         vendor: cambricon

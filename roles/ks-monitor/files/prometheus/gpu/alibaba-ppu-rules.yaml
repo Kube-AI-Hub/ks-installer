@@ -12,51 +12,10 @@ metadata:
   namespace: kubesphere-monitoring-system
 spec:
   groups:
-  # Alibaba PPU Rules - 统一指标名称，添加 vendor="alibaba" 标签，节点聚合
-  # 注意：Alibaba PPU 使用与 NVIDIA 相同的 DCGM 指标
+  # Alibaba PPU Rules - 容器级别 GPU 分配量（节点级别指标由 cluster-gpu-rules 统一从 gpu-agent 聚合）
   - name: alibaba-ppu.rules
     interval: 1m
     rules:
-    # 节点级别 - GPU 使用量（基于利用率计算）
-    - record: node:gpu_usage:count
-      expr: |
-        label_replace(
-          ((sum(DCGM_FI_DEV_GPU_UTIL{job=~".*alibaba.*|.*ppu.*"}) by (node) or vector(0)) / 100),
-          "vendor", "alibaba", "", ""
-        )
-      labels:
-        vendor: alibaba
-    
-    # 节点级别 - GPU 显存使用量（统一名称，bytes，节点聚合）
-    - record: node:gpu_memory_usage:bytes
-      expr: |
-        label_replace(
-          (sum(DCGM_FI_DEV_FB_USED{job=~".*alibaba.*|.*ppu.*"} * 1024 * 1024) by (node) or vector(0)),
-          "vendor", "alibaba", "", ""
-        )
-      labels:
-        vendor: alibaba
-    
-    # 节点级别 - GPU 显存总量（统一名称，bytes，节点聚合）
-    - record: node:gpu_memory_total:bytes
-      expr: |
-        label_replace(
-          (sum(DCGM_CUSTOM_DEV_FB_TOTAL{job=~".*alibaba.*|.*ppu.*"} * 1024 * 1024) by (node) or vector(0)),
-          "vendor", "alibaba", "", ""
-        )
-      labels:
-        vendor: alibaba
-    
-    # 节点级别 - GPU 总数（统一名称，按型号统计）
-    - record: node:gpu_total:count
-      expr: |
-        label_replace(
-          (count(DCGM_FI_DEV_GPU_UTIL{job=~".*alibaba.*|.*ppu.*"}) by (node) or vector(0)),
-          "vendor", "alibaba", "", ""
-        )
-      labels:
-        vendor: alibaba
-    
     # 容器级别 - GPU 分配量
     - record: container:gpu_allocated:count
       expr: |

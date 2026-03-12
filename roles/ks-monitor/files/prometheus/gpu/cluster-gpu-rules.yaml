@@ -193,6 +193,12 @@ spec:
       expr: |
         sum by (node, vendor) (gpu_agent_card_allocation_rate)
     
+    # 节点级别 - GPU 分配率（from gpu-agent）
+    - record: node:gpu_allocation_rate
+      expr: |
+        sum by (node, vendor) (gpu_agent_card_allocation_rate)
+        / (count by (node, vendor) (gpu_card_utilisation) > 0)
+    
     # 集群级别 - GPU 利用率（所有 vendor 的平均）
     - record: cluster:gpu_utilization:ratio
       expr: |

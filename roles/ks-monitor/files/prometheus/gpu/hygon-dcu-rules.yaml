@@ -12,50 +12,10 @@ metadata:
   namespace: kubesphere-monitoring-system
 spec:
   groups:
-  # Hygon DCU Rules - 统一指标名称，添加 vendor="hygon" 标签，节点聚合
+  # Hygon DCU Rules - 容器级别 GPU 分配量（节点级别指标由 cluster-gpu-rules 统一从 gpu-agent 聚合）
   - name: hygon-dcu.rules
     interval: 1m
     rules:
-    # 节点级别 - GPU 使用量（基于利用率计算）
-    - record: node:gpu_usage:count
-      expr: |
-        label_replace(
-          ((sum(dcu_utilizationrate) by (node) or vector(0)) / 100),
-          "vendor", "hygon", "", ""
-        )
-      labels:
-        vendor: hygon
-    
-    # 节点级别 - GPU 显存使用量（统一名称，bytes，节点聚合）
-    - record: node:gpu_memory_usage:bytes
-      expr: |
-        label_replace(
-          (sum(dcu_usedmemory_bytes) by (node) or vector(0)),
-          "vendor", "hygon", "", ""
-        )
-      labels:
-        vendor: hygon
-    
-    # 节点级别 - GPU 显存总量（统一名称，bytes，节点聚合）
-    - record: node:gpu_memory_total:bytes
-      expr: |
-        label_replace(
-          (sum(dcu_memorycap_bytes) by (node) or vector(0)),
-          "vendor", "hygon", "", ""
-        )
-      labels:
-        vendor: hygon
-    
-    # 节点级别 - GPU 总数（统一名称，按型号统计）
-    - record: node:gpu_total:count
-      expr: |
-        label_replace(
-          (count(dcu_utilizationrate) by (node) or vector(0)),
-          "vendor", "hygon", "", ""
-        )
-      labels:
-        vendor: hygon
-    
     # 容器级别 - GPU 分配量
     - record: container:gpu_allocated:count
       expr: |
