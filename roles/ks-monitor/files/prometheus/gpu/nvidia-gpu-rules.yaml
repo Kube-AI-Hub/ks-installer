@@ -67,3 +67,17 @@ spec:
       labels:
         vendor: nvidia
 
+    # 节点级别 - GPU 已分配卡数（from gpu-agent allocation rate sum）
+    - record: node:gpu_allocated:count
+      expr: |
+        sum(gpu_agent_card_allocation_rate{vendor="nvidia"}) by (node)
+      labels:
+        vendor: nvidia
+
+    # 节点级别 - GPU 分配率（from gpu-agent）
+    - record: node:gpu_allocation_rate
+      expr: |
+        sum(gpu_agent_card_allocation_rate{vendor="nvidia"}) by (node)
+        / (count(gpu_card_utilisation{vendor="nvidia"}) by (node) > 0)
+      labels:
+        vendor: nvidia

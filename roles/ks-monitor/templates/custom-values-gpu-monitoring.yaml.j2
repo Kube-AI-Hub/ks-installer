@@ -31,6 +31,10 @@ affinity:
         - key: nvidia.com/gpu.present
           operator: Exists
 
+# Disable ServiceMonitor — Prometheus scrapes gpu-agent exporter instead of dcgm-exporter directly
+serviceMonitor:
+  enabled: false
+
 # Enable pod labels to include pod-level GPU metrics (namespace, pod_name, etc.)
 # Note: This requires dcgm-exporter to query Kubernetes API for pod information,
 # which may cause API throttling in large clusters. The ClusterRole we created

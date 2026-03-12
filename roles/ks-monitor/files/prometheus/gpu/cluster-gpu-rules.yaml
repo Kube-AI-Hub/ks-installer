@@ -184,6 +184,11 @@ spec:
         sum by (node, vendor) (gpu_card_memory_total_bytes)
     
     # 节点级别 - GPU 分配量（from gpu-agent）
+    # 依赖：HAMi gpu-agent 暴露的 gpu_agent_card_allocation_rate（每卡分配率 0~1，按 node/vendor 求和即已分配卡数）。
+    # 若 node_gpu_allocated 为空，请依次检查：
+    # 1) Prometheus 中是否有 gpu_agent_card_allocation_rate 序列（GPU 节点是否部署并运行 gpu-agent）；
+    # 2) gpu-agent 的 ServiceMonitor 是否被 Prometheus 抓取；
+    # 3) 本 PrometheusRule 是否已加载到集群使用的 Prometheus 实例。
     - record: node:gpu_allocated:count
       expr: |
         sum by (node, vendor) (gpu_agent_card_allocation_rate)

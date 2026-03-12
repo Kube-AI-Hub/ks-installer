@@ -94,6 +94,12 @@
   retries: 5
   delay: 5
 
+- name: Monitoring | Installing gpu-agent exporter ServiceMonitor
+  shell: >
+    {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/gpu-monitoring/gpu-agent-service-monitor.yaml --force
+  when:
+    - monitoring.gpu is defined
+
 - name: Monitoring | Installing GPU PrometheusRule
   shell: >
     {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/prometheus/gpu --force

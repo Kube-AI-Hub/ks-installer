@@ -59,25 +59,27 @@ spec:
     
     # 容器级别 - GPU 使用量（基于 podresources collector）
     # 通过 mlu_container 找到对应 MLU 设备的 mlu_utilization
+    # 使用 node,mlu,uuid,vf 匹配，避免 dynamic-smlu 下不同卡有相同 (uuid,vf) 导致 duplicate series
     - record: container:gpu_usage:count
       expr: |
         sum by (namespace, pod, container) (
-          (mlu_utilization / 100) * on(uuid, vf) group_right() mlu_container
+          (mlu_utilization / 100)
+          * on(node, mlu, uuid, vf) group_right()
+          mlu_container
         )
       labels:
         vendor: cambricon
     
     # 容器级别 - GPU 显存使用量
+    # mlu_container 在 dynamic-smlu 下对同一实例会输出 vcore 和 vmemory 两条，需去重
     - record: container:gpu_memory_usage:bytes
       expr: |
         sum by (namespace, pod, container) (
+          label_replace(mlu_memory_used, "app_namespace", "$1", "namespace", "(.+)")
+          * on(uuid) group_left(namespace, pod, container)
           label_replace(
-            mlu_memory_used, "app_namespace", "$1", "namespace", "(.+)"
-          ) * on(uuid) group_left(namespace, pod, container) (
-            label_replace(
-              mlu_container,
-              "app_namespace", "$1", "namespace", "(.+)"
-            )
+            max by (namespace, pod, container, node, mlu, uuid, vf) (mlu_container),
+            "app_namespace", "$1", "namespace", "(.+)"
           )
         )
       labels:
@@ -93,3 +95,17 @@ spec:
       labels:
         vendor: cambricon
 
+    # 节点级别 - GPU 已分配卡数（from gpu-agent allocation rate sum）
+    - record: node:gpu_allocated:count
+      expr: |
+        sum(gpu_agent_card_allocation_rate{vendor="cambricon"}) by (node)
+      labels:
+        vendor: cambricon
+
+    # 节点级别 - GPU 分配率（from gpu-agent）
+    - record: node:gpu_allocation_rate
+      expr: |
+        sum(gpu_agent_card_allocation_rate{vendor="cambricon"}) by (node)
+        / (count(gpu_card_utilisation{vendor="cambricon"}) by (node) > 0)
+      labels:
+        vendor: cambricon

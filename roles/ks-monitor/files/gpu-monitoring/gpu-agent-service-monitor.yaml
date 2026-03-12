@@ -1,0 +1,23 @@
+# Fallback ServiceMonitor for gpu-agent exporter.
+# If HAMi chart is deployed with gpuAgent.serviceMonitor.enabled=true,
+# the chart already creates its own ServiceMonitor and this file is redundant.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gpu-agent-exporter
+  namespace: kubesphere-monitoring-system
+  labels:
+    app.kubernetes.io/name: gpu-agent-exporter
+    app.kubernetes.io/component: gpu-monitoring
+spec:
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    honorLabels: true
+  jobLabel: component
+  namespaceSelector:
+    any: true
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: gpu-agent

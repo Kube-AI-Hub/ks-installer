@@ -204,7 +204,7 @@ elasticsearch_oss_tag: 6.8.22
 fluentbit_operator_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/fluentbit-operator"
 fluentbit_operator_tag: v0.14.0
 docker_repo: "{{ base_library_repo }}docker"
-docker_tag: 19.03
+docker_tag: 29.2
 opensearch_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/opensearchproject/opensearch"
 opensearch_tag: 2.6.0
 opensearch_dashboards_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/opensearchproject/opensearch-dashboards"
