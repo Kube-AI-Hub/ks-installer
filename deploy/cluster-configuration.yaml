@@ -65,7 +65,7 @@ spec:
           default: False
           memoryUnit: Mi
           memoryName: nvidia.com/gpumem
-          vcoresName: nvidia.com/cores
+          vcoresName: nvidia.com/gpucores
 
         # Cambricon MLU370 物理卡
         - resourceName: cambricon.com/mlu370
