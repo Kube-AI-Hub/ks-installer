@@ -27,6 +27,24 @@
     - notification_check.rc == 0
   failed_when: update_crds is not succeeded
 
+# After applying crds, bundle.yaml's hardcoded caBundle overwrites the conversion webhook
+# CA. When helm upgrade is skipped (e.g. already at 2.3.0), the post-install hook does
+# not run, so CRDs keep the wrong CA and ks-apiserver fails with TLS verification.
+# Patch both CRDs with the current webhook CA from ValidatingWebhookConfiguration.
+- name: notification-manager | Patch CRD conversion webhook caBundle from ValidatingWebhook
+  shell: |
+    cabundle=$({{ bin_dir }}/kubectl get validatingwebhookconfiguration notification-manager-validating-webhook -o jsonpath='{.webhooks[0].clientConfig.caBundle}')
+    if [ -n "$cabundle" ]; then
+      {{ bin_dir }}/kubectl patch crd configs.notification.kubesphere.io --type=merge -p='{"spec":{"conversion":{"webhook":{"clientConfig":{"caBundle":"'"$cabundle"'"}}}}}'
+      {{ bin_dir }}/kubectl patch crd receivers.notification.kubesphere.io --type=merge -p='{"spec":{"conversion":{"webhook":{"clientConfig":{"caBundle":"'"$cabundle"'"}}}}}'
+    fi
+  when:
+    - notification_check.rc == 0
+    - update_crds is succeeded
+  failed_when: false
+  register: patch_crd_cabundle
+  changed_when: patch_crd_cabundle.rc == 0
+
 - name: notification-manager | Deploying notification-manager
   shell: >
     {{ bin_dir }}/helm upgrade --install notification-manager
