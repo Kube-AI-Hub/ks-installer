@@ -233,8 +233,8 @@ auditing_webhook_tag: v0.2.0
 #ingress:
 nginx_ingress_controller_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/nginx-ingress-controller"
 nginx_ingress_controller_tag: v1.3.1
-defaultbackend_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/mirrorgooglecontainers/defaultbackend-amd64"
-defaultbackend_tag: 1.4
+defaultbackend_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/ingress-gce-404-server"
+defaultbackend_tag: v1.38.1-54-gcd2c075cd
 
 #metrics:
 metrics_server_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/metrics-server"
