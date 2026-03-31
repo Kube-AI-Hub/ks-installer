@@ -20,7 +20,7 @@ header='{
 # 	'
 # )
 # openpitrix {"sub": "system","role": "global_admin","iat": 1516239022,"exp": 1816239022}
-# ks-account {"email": "admin@kubesphere.io","exp": 1816239022,"username": "admin"}
+# ks-account {"email": "admin@kube-ai-hub.local","exp": 1816239022,"username": "admin"}
 payload=$2
 
 base64_encode()
