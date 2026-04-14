@@ -158,6 +158,11 @@ data:
 {% endif %}
 {% endfor %}
 {% endif %}
+{% if common.platformModel is defined and common.platformModel.enabled is defined and common.platformModel.enabled == true %}
+    platformModel:
+      url: {{ common.platformModel.url }}
+      enabled: {{ common.platformModel.enabled }}
+{% endif %}
     notification:
 {% if common.notification is defined and common.notification.endpoint is defined %}
       endpoint: {{ common.notification.endpoint }}
