@@ -70,13 +70,13 @@ spec:
         # Cambricon MLU370 物理卡
         - resourceName: cambricon.com/mlu370
           displayName: "MLU370 - Cambricon/寒武纪"
-          resourceType: GPU
+          resourceType: MLU
           default: False
 
         # Cambricon MLU smlu 虚拟卡
         - resourceName: cambricon.com/vmlu
           displayName: "vMLU - Cambricon/寒武纪"
-          resourceType: GPU
+          resourceType: MLU
           default: False
           memoryUnit: '%'
           memoryName: cambricon.com/mlu.smlu.vmemory
@@ -85,55 +85,55 @@ spec:
         # Cambricon MLU370 共享卡
         - resourceName: cambricon.com/mlu370.share
           displayName: "sMLU370 - Cambricon/寒武纪"
-          resourceType: GPU
+          resourceType: MLU
           default: False
 
         # 昇腾系列虚拟NPU
         - resourceName: huawei.com/Ascend910A
           displayName: "NPU910A - Ascend/昇腾"
-          resourceType: GPU
+          resourceType: NPU
           default: False
           memoryUnit: Mi
           memoryName: huawei.com/Ascend910A-memory
 
         - resourceName: huawei.com/Ascend310P
           displayName: "NPU310P - Ascend/昇腾"
-          resourceType: GPU
+          resourceType: NPU
           default: False
           memoryUnit: Mi
           memoryName: huawei.com/Ascend310P-memory
 
         - resourceName: huawei.com/Ascend910B
           displayName: "NPU910B - Ascend/昇腾"
-          resourceType: GPU
+          resourceType: NPU
           default: False
           memoryUnit: Mi
           memoryName: huawei.com/Ascend910B-memory
 
         - resourceName: huawei.com/Ascend910B2
           displayName: "NPU910B2 - Ascend/昇腾"
-          resourceType: GPU
+          resourceType: NPU
           default: False
           memoryUnit: Mi
           memoryName: huawei.com/Ascend910B2-memory
 
         - resourceName: huawei.com/Ascend910B3
           displayName: "NPU910B3 - Ascend/昇腾"
-          resourceType: GPU
+          resourceType: NPU
           default: False
           memoryUnit: Mi
           memoryName: huawei.com/Ascend910B3-memory
 
         - resourceName: huawei.com/Ascend910B4
           displayName: "NPU910B4 - Ascend/昇腾"
-          resourceType: GPU
+          resourceType: NPU
           default: False
           memoryUnit: Mi
           memoryName: huawei.com/Ascend910B4-memory
 
         - resourceName: huawei.com/Ascend910B4-1
           displayName: "NPU910B4-1 - Ascend/昇腾"
-          resourceType: GPU
+          resourceType: NPU
           default: False
           memoryUnit: Mi
           memoryName: huawei.com/Ascend910B4-1-memory
@@ -141,7 +141,7 @@ spec:
         # 海光DCU虚拟卡
         - resourceName: hygon.com/dcunum
           displayName: "DCU - Hygon/海光"
-          resourceType: GPU
+          resourceType: DCU
           default: False
           memoryUnit: Mi
           memoryName: hygon.com/dcumem
@@ -150,7 +150,7 @@ spec:
         # 天数智芯系列虚拟卡
         - resourceName: iluvatar.ai/MR-V50-vgpu
           displayName: "MR-V50 - Iluvatar/天数"
-          resourceType: GPU
+          resourceType: ILUVATAR
           default: False
           memoryUnit: '*256Mi'
           memoryName: iluvatar.ai/MR-V50.vMem
@@ -158,7 +158,7 @@ spec:
 
         - resourceName: iluvatar.ai/MR-V100-vgpu
           displayName: "MR-V100 - Iluvatar/天数"
-          resourceType: GPU
+          resourceType: ILUVATAR
           default: False
           memoryUnit: '*256Mi'
           memoryName: iluvatar.ai/MR-V100.vMem
@@ -166,7 +166,7 @@ spec:
 
         - resourceName: iluvatar.ai/BI-V100-vgpu
           displayName: "BI-V100 - Iluvatar/天数"
-          resourceType: GPU
+          resourceType: ILUVATAR
           default: False
           memoryUnit: '*256Mi'
           memoryName: iluvatar.ai/BI-V100.vMem
@@ -174,7 +174,7 @@ spec:
 
         - resourceName: iluvatar.ai/BI-V150-vgpu
           displayName: "BI-V150 - Iluvatar/天数"
-          resourceType: GPU
+          resourceType: ILUVATAR
           default: False
           memoryUnit: '*256Mi'
           memoryName: iluvatar.ai/BI-V150.vMem
@@ -182,7 +182,7 @@ spec:
 
         - resourceName: iluvatar.ai/BI-V150S-vgpu
           displayName: "BI-V150S - Iluvatar/天数"
-          resourceType: GPU
+          resourceType: ILUVATAR
           default: False
           memoryUnit: '*256Mi'
           memoryName: iluvatar.ai/BI-V150S.vMem
@@ -191,13 +191,13 @@ spec:
         # 沐曦METAX物理卡
         - resourceName: metax-tech.com/gpu
           displayName: "METAX - Metax/沐曦"
-          resourceType: GPU
+          resourceType: METAX
           default: False
 
         # 沐曦vMETAX虚拟卡
         - resourceName: metax-tech.com/sgpu
           displayName: "vMETAX - Metax/沐曦"
-          resourceType: GPU
+          resourceType: METAX
           default: False
           memoryUnit: Gi
           memoryName: metax-tech.com/vmemory
@@ -206,26 +206,26 @@ spec:
         # 燧原GCU物理卡
         - resourceName: enflame.com/gcu
           displayName: "GCU - Enflame/燧原"
-          resourceType: GPU
+          resourceType: GCU
           default: False
 
         # 燧原vGCU虚拟卡
         - resourceName: enflame.com/vgcu
           displayName: "vGCU - Enflame/燧原"
-          resourceType: GPU
+          resourceType: GCU
           default: False
           vcoresName: enflame.com/vgcu-percentage
 
         # 阿里巴巴PPU物理卡
         - resourceName: alibabacloud.com/ppu
           displayName: "PPU - Alibaba/阿里巴巴"
-          resourceType: GPU
+          resourceType: PPU
           default: False
 
         # 摩尔线程vMTHREADS虚拟卡
         - resourceName: mthreads.com/vgpu
           displayName: "vMTHREADS - Mthreads/摩尔线程"
-          resourceType: GPU
+          resourceType: MTHREADS
           default: False
           memoryUnit: '*512Mi'
           memoryName: mthreads.com/sgpu-memory
@@ -234,13 +234,13 @@ spec:
         # 昆仑芯XPU物理卡
         - resourceName: kunlunxin.com/xpu
           displayName: "XPU - Kunlunxin/昆仑芯"
-          resourceType: GPU
+          resourceType: XPU
           default: False
 
         # 昆仑芯vXPU虚拟卡
         - resourceName: kunlunxin.com/vxpu
           displayName: "vXPU - Kunlunxin/昆仑芯"
-          resourceType: GPU
+          resourceType: XPU
           default: False
           memoryUnit: Mi
           memoryName: kunlunxin.com/vxpu-memory
