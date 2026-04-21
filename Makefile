@@ -3,11 +3,11 @@ TAG?=$(shell git rev-parse --abbrev-ref HEAD | sed -e 's/\//-/g')-dev-$(shell gi
 CONTAINER_CLI?=docker
 
 build:
-	$(CONTAINER_CLI) build . --file Dockerfile --tag $(REPO)/ks-installer:$(TAG)
+	$(CONTAINER_CLI) build . --file Dockerfile --build-arg SHELL_OPERATOR_IMAGE=$(REPO)/shell-operator:$(TAG) --tag $(REPO)/ks-installer:$(TAG)
 push:
 	$(CONTAINER_CLI) push $(REPO)/ks-installer:$(TAG)
 push-multiarch:
-	$(CONTAINER_CLI) buildx build . --file Dockerfile --tag $(REPO)/ks-installer:$(TAG) --platform linux/amd64,linux/arm64 --push
+	$(CONTAINER_CLI) buildx build . --file Dockerfile --build-arg SHELL_OPERATOR_IMAGE=$(REPO)/shell-operator:$(TAG) --tag $(REPO)/ks-installer:$(TAG) --platform linux/amd64,linux/arm64 --push
 all: build push
 
 build-shelloperator-multiarch:

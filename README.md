@@ -6,7 +6,7 @@ In addition to supporting deploying on VM and BM, KubeSphere also supports insta
 
 ## Prerequisites
 
-> - Kubernetes Version: 1.20.x, 1.21.x, 1.22.x, 1.23.x (experimental);
+> - Kubernetes Version: 1.28.x, 1.29.x, 1.30.x, 1.31.x, 1.32.x, 1.33.x, 1.34.x, 1.35.x;
 > - CPU > 1 Core, Memory > 2 G;
 > - An existing default Storage Class in your Kubernetes clusters.
 > - The CSR signing feature is activated in kube-apiserver when it is started with the `--cluster-signing-cert-file` and `--cluster-signing-key-file` parameters, see [RKE installation issue](https://github.com/kubesphere/kubesphere/issues/1925#issuecomment-591698309).
@@ -19,7 +19,7 @@ Client Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.8", GitCom
 Server Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.8", GitCommit:"fd5d41537aee486160ad9b5356a9d82363273721", GitTreeState:"clean", BuildDate:"2021-02-17T12:33:08Z", GoVersion:"go1.15.8", Compiler:"gc", Platform:"linux/amd64"}
 ```
 
-> Note: Pay attention to `Server Version` line, if `GitVersion` is greater than `v1.19.0`, it's good to go. Otherwise you need to upgrade your Kubernetes first.
+> Note: Pay attention to the `Server Version` line. If `GitVersion` is between `v1.28.0` and `v1.35.x`, it's good to go. Otherwise you need to upgrade your Kubernetes first.
 
 2. Check if the available resources meet the minimal prerequisite in your cluster.
 

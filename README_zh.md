@@ -6,7 +6,7 @@ KubeSphere 支持在已有 Kubernetes 集群之上部署 [KubeSphere](https://ku
 
 ## 准备工作
 
-1. 确认现有的 `Kubernetes` 版本为 `1.20.x, 1.21.x, 1.22.x, 1.23.x (experimental)`，可以执行 `kubectl version` 来确认 :
+1. 确认现有的 `Kubernetes` 版本为 `1.28.x, 1.29.x, 1.30.x, 1.31.x, 1.32.x, 1.33.x, 1.34.x, 1.35.x`，可以执行 `kubectl version` 来确认 :
 
 ```bash
 $ kubectl version
@@ -14,7 +14,7 @@ Client Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.8", GitCom
 Server Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.8", GitCommit:"fd5d41537aee486160ad9b5356a9d82363273721", GitTreeState:"clean", BuildDate:"2021-02-17T12:33:08Z", GoVersion:"go1.15.8", Compiler:"gc", Platform:"linux/amd64"}
 ```
 
-注意输出结果中的 `Server Version` 这行，如果显示 `GitVersion` 大于 `v1.19.0`，Kubernetes 的版本是可以安装的。如果低于 `v1.19.0`，可以先对 K8s 版本进行升级。
+注意输出结果中的 `Server Version` 这行，如果显示 `GitVersion` 在 `v1.28.0` 到 `v1.35.x` 之间，Kubernetes 的版本是可以安装的。如果不在这个范围内，可以先对 K8s 版本进行升级。
 
 
 2. 集群现有的可用内存至少在 `2G` 以上。 如果是执行的 `allinone` 安装，那么执行 `free -g` 可以看下可用资源
