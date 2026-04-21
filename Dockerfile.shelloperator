@@ -2,13 +2,15 @@ FROM --platform=${TARGETPLATFORM:-linux/amd64} flant/jq:b6be13d5-musl AS libjq
 
 FROM --platform=${TARGETPLATFORM:-linux/amd64} golang:1.25.8-alpine3.23 AS shell-operator-builder
 
-ARG SHELL_OPERATOR_VERSION=v1.16.4
+ARG SHELL_OPERATOR_VERSION=v1.6.4-kah
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=${GOPROXY}
 
 RUN apk --no-cache add git ca-certificates gcc musl-dev libc-dev binutils-gold
 
 WORKDIR /src
 
-RUN git clone --branch ${SHELL_OPERATOR_VERSION} --depth 1 https://github.com/flant/shell-operator.git .
+RUN git clone --branch ${SHELL_OPERATOR_VERSION} --depth 1 https://gh-proxy.org/https://github.com/Kube-AI-Hub/shell-operator.git .
 RUN go mod download
 RUN GOOS=linux \
     go build \
@@ -19,21 +21,23 @@ RUN GOOS=linux \
 FROM python:3.10-alpine3.23
 
 ENV ARCH=amd64
+ARG FILES_REPO=https://files.m.daocloud.io
+ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 
 # 使用国内镜像源加速
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 RUN apk --no-cache add yq bash curl unzip openssl && \
     apk --no-cache add gcc libffi-dev openssl-dev musl-dev && \
     export CRYPTOGRAPHY_DONT_BUILD_RUST=1 && \
-    pip install --no-cache-dir ansible_runner==2.2.0 ansible==2.9.27 kubernetes --use-deprecated=legacy-resolver && \
+    pip install --no-cache-dir -i ${PIP_INDEX_URL} ansible_runner==2.2.0 ansible==2.9.27 kubernetes --use-deprecated=legacy-resolver && \
     apk del gcc libffi-dev openssl-dev musl-dev && \
     if [[ $(arch) == aarch64* ]]; then ARCH=arm64; fi && \
-    wget https://get.helm.sh/helm-v3.9.0-linux-${ARCH}.tar.gz && \
+    wget ${FILES_REPO}/get.helm.sh/helm-v3.9.0-linux-${ARCH}.tar.gz && \
     tar -zxf helm-v3.9.0-linux-${ARCH}.tar.gz && \
     mv linux-${ARCH}/helm /bin/helm && \
     rm -rf *linux-${ARCH}* && \
     chmod +x /bin/helm && \
-    wget https://storage.googleapis.com/kubernetes-release/release/v1.23.7/bin/linux/${ARCH}/kubectl -O /bin/kubectl && \
+    wget ${FILES_REPO}/dl.k8s.io/release/v1.23.7/bin/linux/${ARCH}/kubectl -O /bin/kubectl && \
     chmod +x /bin/kubectl && \
     ln -s /bin/kubectl /usr/local/bin/kubectl && \
     ln -s /bin/helm /usr/local/bin/helm && \
