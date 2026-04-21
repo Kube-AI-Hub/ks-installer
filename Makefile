@@ -1,4 +1,4 @@
-REPO?=kube-ai-hub
+REPO?=watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub
 TAG?=$(shell git rev-parse --abbrev-ref HEAD | sed -e 's/\//-/g')-dev-$(shell git rev-parse --short HEAD)
 CONTAINER_CLI?=docker
 
