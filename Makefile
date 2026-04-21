@@ -7,7 +7,7 @@ build:
 push:
 	$(CONTAINER_CLI) push $(REPO)/ks-installer:$(TAG)
 push-multiarch:
-	$(CONTAINER_CLI) buildx build . --file Dockerfile --build-arg SHELL_OPERATOR_IMAGE=$(REPO)/shell-operator:$(TAG) --tag $(REPO)/ks-installer:$(TAG) --platform linux/amd64,linux/arm64 --push
+	$(CONTAINER_CLI) buildx build . --file Dockerfile --tag $(REPO)/ks-installer:$(TAG) --platform linux/amd64,linux/arm64 --push
 all: build push
 
 build-shelloperator-multiarch:

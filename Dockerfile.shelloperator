@@ -2,10 +2,12 @@ FROM --platform=${TARGETPLATFORM:-linux/amd64} flant/jq:b6be13d5-musl AS libjq
 
 FROM --platform=${TARGETPLATFORM:-linux/amd64} golang:1.25.8-alpine3.23 AS shell-operator-builder
 
-ARG SHELL_OPERATOR_VERSION=v1.6.4-kah
+ARG SHELL_OPERATOR_VERSION=v1.16.4-log-2
 ARG GOPROXY=https://goproxy.cn,direct
 ENV GOPROXY=${GOPROXY}
 
+# 替换为国内源
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 RUN apk --no-cache add git ca-certificates gcc musl-dev libc-dev binutils-gold
 
 WORKDIR /src
@@ -59,6 +61,7 @@ RUN chown -R kubesphere:kubesphere /shell-operator && \
     chown -R kubesphere:kubesphere /var/run/shell-operator
 
 ENV SHELL_OPERATOR_HOOKS_DIR /hooks
+ENV LOG_TYPE color
 
 ENTRYPOINT ["/shell-operator"]
 
