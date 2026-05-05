@@ -60,7 +60,6 @@ ks_console_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') 
 ks_console_tag: "{{ ks_version }}"
 ks_kubectl_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/kubectl"
 ks_kubectl_tag: v1.22.0
-dcgm_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/nvidia/dcgm-exporter"
 # kubectl versions
 ks_kubectl_versions:
   v1.22.0: v1.22.0
