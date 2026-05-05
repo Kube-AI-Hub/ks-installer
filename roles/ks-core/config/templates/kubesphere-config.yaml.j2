@@ -130,7 +130,7 @@ data:
 {% else %}
       endpoint: http://prometheus-operated.kubesphere-monitoring-system.svc:9090
 {% endif %}
-{% if common.monitoring.GPUMonitoring is defined and common.monitoring.GPUMonitoring.enabled == true %}
+{% if monitoring.gpu is defined and monitoring.gpu.enabled | default(false) | bool %}
       enableGPUMonitoring: true
 {% else %}
       enableGPUMonitoring: false

@@ -47,8 +47,6 @@ spec:
     monitoring:
       # type: external   # Whether to specify the external prometheus stack, and need to modify the endpoint at the next line.
       endpoint: http://prometheus-operated.kubesphere-monitoring-system.svc:9090 # Prometheus endpoint to get metrics data.
-      GPUMonitoring:     # Enable or disable the GPU-related metrics. If you enable this switch but have no GPU resources, Kubesphere will set it to zero.
-        enabled: true
     gpu:                 # Install GPUKinds. The default GPU kind is nvidia.com/gpu. Other GPU kinds can be added here according to your needs.
       kinds:
         # NVIDIA 物理GPU
@@ -342,7 +340,7 @@ spec:
     #     resources: {}
     #   proxy:
     #     resources: {}
-    gpu:  # When enabled is true: gpu-agent ServiceMonitor, GPU PrometheusRules, dashboards.
+    gpu:  # When enabled: gpu-agent ServiceMonitor, GPU PrometheusRules, dashboards, and kubesphere-config enableGPUMonitoring.
       enabled: true
   multicluster:
     clusterRole: none  # host | member | none  # You can install a solo cluster, or specify it as the Host or Member Cluster.
