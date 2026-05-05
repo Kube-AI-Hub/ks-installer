@@ -1,12 +1,12 @@
 ---
-- name: KubeSphere | Creating KubeSphere directory
+- name: KubeAIHub | Creating KubeSphere directory
   file:
     path: "{{ kubesphere_dir }}"
     state: directory
     mode: 0755
 
 
-- name: KubeSphere | Getting installation init files
+- name: KubeAIHub | Getting installation init files
   copy:
     src: "{{ item }}"
     dest: "{{ kubesphere_dir }}/"
@@ -16,51 +16,51 @@
 
 # https://tools.ietf.org/html/rfc7518#section-3.2
 # A key of the same size as the hash output (for instance, 256 bits for"HS256") or larger MUST be used with this algorithm.
-- name: KubeSphere | Creating KubeSphere Secret
+- name: KubeAIHub | Creating KubeSphere Secret
   shell: >
     dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | tr -d '\n' | dd bs=32 count=1 2>/dev/null
   register: ks_secret
 
 
-- name: KubeSphere | Creating KubeSphere Secret
+- name: KubeAIHub | Creating KubeSphere Secret
   set_fact:
     ks_secret_str: "{{ ks_secret.stdout }}"
   when:
     - (authentication is not defined and authentication.jwtSecret is not defined) or authentication.jwtSecret == ""
 
 
-- name: KubeSphere | Creating KubeSphere Secret
+- name: KubeAIHub | Creating KubeSphere Secret
   set_fact:
     ks_secret_str: "{{ authentication.jwtSecret }}"
   when:
     - authentication is defined and authentication.jwtSecret is defined and authentication.jwtSecret != ""
 
 
-- name: KubeSphere | Enabling Token Script
+- name: KubeAIHub | Enabling Token Script
   file:
     path: "{{ kubesphere_dir }}/jwt-script/jwt.sh"
     mode: 0755
 
 
-- name: KubeSphere | Getting KubeSphere Token
+- name: KubeAIHub | Getting KubeSphere Token
   shell: >
     /bin/bash {{ kubesphere_dir }}/jwt-script/jwt.sh  {{ ks_secret_str }} '{"email": "admin@kube-ai-hub.local","username": "admin","token_type": "static_token"}'
   register: ks_token
 
 
-- name: KubeSphere | Checking KubeSphere secrets
+- name: KubeAIHub | Checking KubeSphere secrets
   shell: >
     {{ bin_dir }}/kubectl get secrets -n kubesphere-system
   register: kubesphere_secrets
 
-- name: KubeSphere | Deleting KubeSphere secret
+- name: KubeAIHub | Deleting KubeSphere secret
   shell: >
     {{ bin_dir }}/kubectl delete secrets -n kubesphere-system kubesphere-secret
   when:
     - kubesphere_secrets.stdout.find("kubesphere-secret") != -1
     - authentication is defined and authentication.jwtSecret is defined and authentication.jwtSecret != ""
 
-- name: KubeSphere | Creating components token
+- name: KubeAIHub | Creating components token
   shell: >
     {{ bin_dir }}/kubectl create secret generic kubesphere-secret
     --from-literal=token={{ ks_token.stdout }}

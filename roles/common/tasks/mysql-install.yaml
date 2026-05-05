@@ -1,5 +1,5 @@
 
-- name: KubeSphere | Deploying common component
+- name: KubeAIHub | Deploying common component
   shell: >
     {{ bin_dir }}/kubectl -n kubesphere-system apply -f {{ kubesphere_dir }}/common/{{ item }}
   loop:
@@ -10,7 +10,7 @@
     - "mysql_result.stderr and 'is forbidden' not in mysql_result.stderr"
 #  when: devops.enabled or openpitrix.enabled or notification.enabled or alerting.enabled
 
-- name: KubeSphere | Importing mysql status
+- name: KubeAIHub | Importing mysql status
   shell: >
     {{ bin_dir }}/kubectl patch cc ks-installer
     --type merge

@@ -1,13 +1,13 @@
 ---
 
-- name: KubeSphere | Checking kube-node-lease namespace
+- name: KubeAIHub | Checking kube-node-lease namespace
   shell: >
     {{ bin_dir }}/kubectl get ns | grep 'kube-node-lease' | wc -l
   register: kube_node_lease
   failed_when: false
 
 
-- name: KubeSphere | Getting system namespaces
+- name: KubeAIHub | Getting system namespaces
   set_fact:
     systemNamespaces: >-
       kubesphere-system
@@ -43,7 +43,7 @@
 - debug:
     msg: "{{ systemNamespacesList }}"
 
-- name: KubeSphere | Creating KubeSphere namespace
+- name: KubeAIHub | Creating KubeSphere namespace
   command: >
     {{ bin_dir }}/kubectl create namespace {{ item }}
   register: ns_state
@@ -51,7 +51,7 @@
   loop: "{{ systemNamespacesList }}"
 
 
-- name: KubeSphere | Labeling system-workspace
+- name: KubeAIHub | Labeling system-workspace
   shell: >
     {{ bin_dir }}/kubectl label ns {{ item }} kubesphere.io/workspace=system-workspace
   register: label_state
@@ -59,7 +59,7 @@
   loop: "{{ ['default', 'kube-public', 'kube-system', systemNamespacesList] | flatten(1) }}"
 
 
-- name: KubeSphere | Labeling namespace for network policy
+- name: KubeAIHub | Labeling namespace for network policy
   shell: >
     for ns in `kubectl get ns -o jsonpath="{.items[*].metadata.name}"`; do kubectl label  ns $ns kubesphere.io/namespace=$ns --overwrite; done
   failed_when: false

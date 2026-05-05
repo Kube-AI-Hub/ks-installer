@@ -3,7 +3,7 @@
   shell: >
     {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/prometheus/thanos-ruler
 
-- name: KubeSphere | Labeling prometheusrules for thanos ruler
+- name: KubeAIHub | Labeling prometheusrules for thanos ruler
   shell: >
     for ns in `kubectl get ns -o jsonpath="{.items[*].metadata.name}"`; do kubectl -n $ns label prometheusrules thanos-ruler=kubesphere role=alert-rules thanosruler- --overwrite -l thanosruler=thanos-ruler,role=thanos-alerting-rules; done
   failed_when: false

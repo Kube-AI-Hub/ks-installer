@@ -10,7 +10,7 @@
 
 
 # Get the matched kubectl image
-- name: KubeSphere | Setting kubectl image version
+- name: KubeAIHub | Setting kubectl image version
   set_fact:
     ks_kubectl_tag: "{{ item.value }}"
     kubectl_break: true

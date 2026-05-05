@@ -1,5 +1,5 @@
 
-- name: KubeSphere | Creating redis migration script
+- name: KubeAIHub | Creating redis migration script
   template:
     src: "{{ item.file }}.j2"
     dest: "{{ kubesphere_dir }}/{{ item.file }}"
@@ -7,7 +7,7 @@
     - { path: /etc/kubesphere, file: redisMigrate.py }
 
 
-- name: KubeSphere | Checking redis-ha status
+- name: KubeAIHub | Checking redis-ha status
   shell: >
     {{ bin_dir }}/kubectl get pod -n kubesphere-system | grep 'redis-ha' | grep -v 'Running' | wc -l
   register: redis_result
@@ -22,6 +22,6 @@
     {{ kubesphere_dir }}/redisMigrate.py
 
 
-- name: KubeSphere | Disabling old redis
+- name: KubeAIHub | Disabling old redis
   shell: >
     {{ bin_dir }}/kubectl -n kubesphere-system scale deployment redis --replicas=0

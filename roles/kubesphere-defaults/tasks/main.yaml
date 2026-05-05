@@ -1,10 +1,10 @@
 ---
-- name: KubeSphere | Setting images' namespace override
+- name: KubeAIHub | Setting images' namespace override
   set_fact:
     namespace_override: "kube-ai-hub"
   when: (local_registry is defined and local_registry != "") or (zone is defined and zone == "cn")
 
-- name: KubeSphere | Configuring defaults
+- name: KubeAIHub | Configuring defaults
   debug:
     msg: "Check roles/kubesphere-defaults/defaults/main.yml"
   tags:

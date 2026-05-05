@@ -1,18 +1,18 @@
-- name: KubeSphere | Init Redis password
+- name: KubeAIHub | Init Redis password
   block:
-    - name: KubeSphere | Generet Random password
+    - name: KubeAIHub | Generet Random password
       set_fact:
         redis_password: "{{ lookup('password', '/dev/null length=15 chars=ascii_letters') }}"
-    - name: KubeSphere | Creating Redis Password Secret
+    - name: KubeAIHub | Creating Redis Password Secret
       shell: >
         {{ bin_dir }}/kubectl -n kubesphere-system create secret generic redis-secret --from-literal=auth={{redis_password}}
       register: secret
       failed_when: "secret.stderr and 'already exists' not in secret.stderr"
 
-- name: KubeSphere | Deploying ha redis
+- name: KubeAIHub | Deploying ha redis
   block:
 
-    - name: KubeSphere | Getting redis installation files
+    - name: KubeAIHub | Getting redis installation files
       copy:
         src: "{{ item }}"
         dest: "{{ kubesphere_dir }}/"
@@ -20,7 +20,7 @@
         - "redis-ha"
 
 
-    - name: KubeSphere | Creating manifests
+    - name: KubeAIHub | Creating manifests
       template:
         src: "{{ item.file }}.j2"
         dest: "{{ kubesphere_dir }}/{{ item.file }}"
@@ -28,13 +28,13 @@
         - { name: custom-values-redis, file: custom-values-redis.yaml }
 
 
-    - name: KubeSphere | Checking old redis status
+    - name: KubeAIHub | Checking old redis status
       shell: >
         {{ bin_dir }}/kubectl get pod -n kubesphere-system  -l app=redis,tier=database,version=redis-4.0 | wc -l
       register: old_redis_exist
 
 
-    - name: KubeSphere | Deleting and backup old redis svc
+    - name: KubeAIHub | Deleting and backup old redis svc
       shell: >
         {{ bin_dir }}/kubectl get svc -n kubesphere-system redis -o yaml > {{ kubesphere_dir }}/redis-svc-backup.yaml
         &&
@@ -43,7 +43,7 @@
         - old_redis_exist.stdout != "0"
 
 
-    - name: KubeSphere | Deploying redis
+    - name: KubeAIHub | Deploying redis
       shell: >
         {{ bin_dir }}/helm upgrade --install ks-redis
         {{ kubesphere_dir }}/redis-ha
@@ -52,7 +52,7 @@
         --namespace kubesphere-system
 
 
-#    - name: KubeSphere | Getting redis PodIp
+#    - name: KubeAIHub | Getting redis PodIp
 #      shell: >
 #        {{ bin_dir }}/kubectl get pod
 #        -n kubesphere-system
@@ -71,7 +71,7 @@
     - common.redis.enableHA is defined and common.redis.enableHA
 
 
-- name: KubeSphere | Deploying redis
+- name: KubeAIHub | Deploying redis
   shell: >
     {{ bin_dir }}/kubectl -n kubesphere-system apply -f {{ kubesphere_dir }}/common/{{ item }}
   loop:
@@ -84,7 +84,7 @@
     - (common.redis.enableHA is defined and not common.redis.enableHA) or (common.redis.enableHA is not defined)
 
 
-- name: KubeSphere | Importing redis status
+- name: KubeAIHub | Importing redis status
   shell: >
     {{ bin_dir }}/kubectl patch cc ks-installer
     --type merge

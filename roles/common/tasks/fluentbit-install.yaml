@@ -1,4 +1,4 @@
-- name: KubeSphere | Getting fluentbit installation files
+- name: KubeAIHub | Getting fluentbit installation files
   copy:
     src: "fluentbit-operator"
     dest: "{{ kubesphere_dir }}/"
@@ -26,7 +26,7 @@
   debug:
     msg: "{{logging_container_runtime}}"
 
-- name: KubeSphere | Creating custom manifests
+- name: KubeAIHub | Creating custom manifests
   template:
     src: "{{ item.file }}.j2"
     dest: "{{ kubesphere_dir }}/fluentbit-operator/{{ item.path }}/{{ item.file }}"
@@ -36,12 +36,12 @@
 
 
 # Upgrade or install fluentbit operator
-- name: KubeSphere | Preparing fluentbit operator setup
+- name: KubeAIHub | Preparing fluentbit operator setup
   shell: >
     {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/fluentbit-operator/init
 
 
-- name: KubeSphere | Deploying new fluentbit operator
+- name: KubeAIHub | Deploying new fluentbit operator
   shell: >
     {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/fluentbit-operator/fluentbit
   register: fluentbit_result
@@ -51,7 +51,7 @@
 
 
 # Update clusterconfig (cc) status
-- name: KubeSphere | Importing fluentbit status
+- name: KubeAIHub | Importing fluentbit status
   shell: >
     {{ bin_dir }}/kubectl patch cc ks-installer
     --type merge

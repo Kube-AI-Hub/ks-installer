@@ -1,13 +1,13 @@
 ---
 
-- name: KubeSphere | Waiting for ks-console
+- name: KubeAIHub | Waiting for ks-console
   shell: "{{ bin_dir }}/kubectl get pod -n kubesphere-system -o wide | grep ks-console | awk '{print $3}'"
   register: result
   until: result.stdout.find("Running") != -1
   retries: 30
   delay: 30
 
-- name: KubeSphere | Waiting for ks-apiserver
+- name: KubeAIHub | Waiting for ks-apiserver
   shell: "{{ bin_dir }}/kubectl get pod -n kubesphere-system -o wide | grep ks-apiserver | awk '{print $3}'"
   register: result
   until: result.stdout.find("Running") != -1
@@ -74,7 +74,7 @@
   register: check
   ignore_errors: true
 
-- name: KubeSphere | Creating KubeSphere clusterId
+- name: KubeAIHub | Creating KubeSphere clusterId
   shell: >
     echo $(cat /proc/sys/kernel/random/uuid)-$(date '+%s')
   register: cluster
@@ -93,7 +93,7 @@
   register: cluster
   ignore_errors: true
 
-- name: KubeSphere | KubeSphere clusterId
+- name: KubeAIHub | KubeSphere clusterId
   set_fact:
     cluster_str: "{{ cluster.stdout}}"
 

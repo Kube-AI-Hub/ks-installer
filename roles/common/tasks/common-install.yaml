@@ -1,4 +1,4 @@
-- name: KubeSphere | Checking KubeSphere Config is Exists
+- name: KubeAIHub | Checking KubeSphere Config is Exists
   shell: >
     {{ bin_dir }}/kubectl get secret -n kubesphere-system | grep "redis-secret" | wc -l
   register: redis_secret_exist
