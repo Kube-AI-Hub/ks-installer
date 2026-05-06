@@ -44,6 +44,9 @@ config:
   multicluster: {}
   monitoring: {}
   notification: {}
+  platformModel:
+    enabled: true
+    url: http://csghub-server.csghub:8080
 
 imagePullSecrets: []
 nameOverride: ""

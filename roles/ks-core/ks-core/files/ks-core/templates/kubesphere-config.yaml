@@ -26,6 +26,12 @@ data:
       endpoint: {{ .Values.config.monitoring.endpoint | default "http://prometheus-operated.kubesphere-monitoring-system.svc:9090" }}
     notification:
       endpoint: {{ .Values.config.notification.endpoint | default "http://notification-manager-svc.kubesphere-monitoring-system.svc:19093" }}
+{{- if .Values.config.platformModel }}
+    {{- with .Values.config.platformModel }}
+    platformModel:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+{{- end }}
 
     {{- with .Values.config.servicemesh }}
     servicemesh:
