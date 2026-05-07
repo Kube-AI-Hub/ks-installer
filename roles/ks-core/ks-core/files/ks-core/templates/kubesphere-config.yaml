@@ -26,12 +26,14 @@ data:
       endpoint: {{ .Values.config.monitoring.endpoint | default "http://prometheus-operated.kubesphere-monitoring-system.svc:9090" }}
     notification:
       endpoint: {{ .Values.config.notification.endpoint | default "http://notification-manager-svc.kubesphere-monitoring-system.svc:19093" }}
-{{- if .Values.config.platformModel }}
-    {{- with .Values.config.platformModel }}
+{{- $pm := .Values.config.platformModel | default dict }}
     platformModel:
-      {{- toYaml . | nindent 6 }}
-    {{- end }}
+{{- if hasKey $pm "enabled" }}
+      enabled: {{ $pm.enabled }}
+{{- else }}
+      enabled: true
 {{- end }}
+      url: {{ if $pm.url }}{{ $pm.url | quote }}{{ else }}"http://csghub-server.csghub:8080"{{ end }}
 
     {{- with .Values.config.servicemesh }}
     servicemesh:

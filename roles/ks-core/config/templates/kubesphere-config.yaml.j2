@@ -158,11 +158,10 @@ data:
 {% endif %}
 {% endfor %}
 {% endif %}
-{% if common.platformModel is defined and common.platformModel.enabled is defined and common.platformModel.enabled == true %}
+{% set _pm = common.platformModel | default({}, true) %}
     platformModel:
-      url: {{ common.platformModel.url }}
-      enabled: {{ common.platformModel.enabled }}
-{% endif %}
+      enabled: {{ (_pm.enabled | default(true)) | lower }}
+      url: {{ (_pm.url | default('http://csghub-server.csghub:8080', true)) | tojson }}
     notification:
 {% if common.notification is defined and common.notification.endpoint is defined %}
       endpoint: {{ common.notification.endpoint }}
