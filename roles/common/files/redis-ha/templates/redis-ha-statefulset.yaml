@@ -41,6 +41,8 @@ spec:
 {{ toYaml .Values.nodeSelector | indent 8 }}
       {{- end }}
       tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
         - key: CriticalAddonsOnly

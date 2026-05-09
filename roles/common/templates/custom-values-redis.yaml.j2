@@ -211,6 +211,13 @@ additionalAffinities:
         - weight: 100
           preference:
             matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: In
+                values:
+                  - ""
+        - weight: 100
+          preference:
+            matchExpressions:
               - key: node-role.kubernetes.io/master
                 operator: In
                 values:

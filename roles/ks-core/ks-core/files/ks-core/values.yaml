@@ -76,11 +76,13 @@ securityContext: {}
   # runAsUser: 1000
 
 # Kubernetes Version shows in KubeSphere console
-kube_version: "v1.19.4"
+kube_version: "v1.34.0"
 
 env: []
 
 tolerations: 
+  - key: node-role.kubernetes.io/control-plane
+    effect: NoSchedule
   - key: node-role.kubernetes.io/master
     effect: NoSchedule
   - key: CriticalAddonsOnly

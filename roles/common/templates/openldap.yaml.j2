@@ -50,6 +50,8 @@ spec:
             cpu: 20m
             memory: 100Mi
       tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
         - key: CriticalAddonsOnly
@@ -57,6 +59,13 @@ spec:
       affinity:
         nodeAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: In
+                values:
+                - ""
           - weight: 100
             preference:
               matchExpressions:

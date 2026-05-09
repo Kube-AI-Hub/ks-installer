@@ -83,6 +83,13 @@ nodeAffinity:
   - weight: 100
     preference:
       matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: In
+        values:
+        - ""
+  - weight: 100
+    preference:
+      matchExpressions:
       - key: node-role.kubernetes.io/master
         operator: In
         values:
@@ -106,6 +113,8 @@ tolerations:
   {{ tolerations | to_nice_yaml(indent=2) | indent(2) }}
 {% else %}
 tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    effect: NoSchedule
   - key: node-role.kubernetes.io/master
     effect: NoSchedule
   - key: CriticalAddonsOnly
