@@ -5,7 +5,7 @@
 
 - name: KubeAIHub | Getting Kubernetes master num
   shell: >
-    {{ bin_dir }}/kubectl get node | awk '{if(NR>1){print $3}}' | grep master | wc -l
+    {{ bin_dir }}/kubectl get node | awk '{if(NR>1){print $3}}' | grep -E 'master|control-plane' | wc -l
   register: masters
   failed_when: false
 
@@ -47,7 +47,7 @@
 
     - name: KubeAIHub | Updating snapshot crd
       command: >
-        {% if kubernetes_version is version('v1.19.0', '>=') %}
+        {% if kubernetes_version is version('v1.24.0', '>=') %}
         {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/snapshot-controller/crds/snapshot.storage.k8s.io_volumesnapshot.yaml --force
         {% else %}
         {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/snapshot-controller/crds/snapshot.storage.k8s.io_volumesnapshot_before119.yaml --force

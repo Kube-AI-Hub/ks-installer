@@ -59,17 +59,11 @@ ks_alerting_migration_tag: "v3.1.0"
 ks_console_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/ks-console"
 ks_console_tag: "{{ ks_version }}"
 ks_kubectl_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/kubectl"
-ks_kubectl_tag: v1.22.0
+ks_kubectl_tag: v1.33.4-kah
 # kubectl versions
 ks_kubectl_versions:
-  v1.22.0: v1.22.0
-  v1.21.0: v1.21.0
-  v1.20.0: v1.20.0
-  v1.19.0: v1.19.1
-  v1.18.0: v1.18.0
-  v1.17.0: v1.17.0
-  v1.16.0: v1.16.0
-  v1.15.0: v1.0.0
+  v1.33.0: v1.33.4-kah
+  v1.28.0: v1.28.0
 
 ks_installer_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/ks-installer"
 ks_installer_tag: "{{ ks_version }}"
@@ -332,7 +326,7 @@ images:
 
   ks_kubectl:
     repo: "{{ ks_kubectl_repo }}"
-    tag: "{{ ks_kubectl_versions['v1.20.0'] }}"
+    tag: "{{ ks_kubectl_tag }}"
     sha256: "{{ ks_kubectl_checksum|default(None) }}"
     group: "kubesphere-images"
 

@@ -10,7 +10,7 @@
 
 - name: KubeAIHub | Stopping if Kubernetes version is nonsupport
   assert:
-    that: kubernetes_version is version('v1.19.0', '>=')
+    that: kubernetes_version is version('v1.24.0', '>=')
     msg: "The current Kubernetes version is not supported !"
 
 - name: KubeAIHub | Checking StorageClass
