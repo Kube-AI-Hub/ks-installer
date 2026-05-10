@@ -153,7 +153,7 @@ argocd_applicationset_tag: v0.4.1
 argocd_dex_repo: "{{ ghcr_image_repo }}{{ namespace_override | default('kube-ai-hub') }}/dexidp/dex"
 argocd_dex_tag: v2.30.2
 argocd_redis_repo: "{{ base_library_repo }}redis"
-argocd_redis_tag: 6.2.6-alpine
+argocd_redis_tag: 8.6.3-alpine3.23
 
 #ks-monitor:
 configmap_reload_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/jimmidyson/configmap-reload"
@@ -253,7 +253,7 @@ kiali_tag: v1.50
 
 #base:
 redis_repo: "{{ base_library_repo }}redis"
-redis_tag: 5.0.14-alpine
+redis_tag: 8.6.3-alpine3.23
 haproxy_repo: "{{ base_library_repo }}haproxy"
 haproxy_tag: 2.0.25-alpine
 alpine_repo: "{{ base_library_repo }}alpine"
