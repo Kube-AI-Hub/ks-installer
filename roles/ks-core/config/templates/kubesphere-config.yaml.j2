@@ -33,7 +33,7 @@ data:
       userSearchBase: ou=Users,dc=kubesphere,dc=io
       groupSearchBase: ou=Groups,dc=kubesphere,dc=io
 {% endif %}
-{% if (common.redis is defined and common.redis.enabled is defined and common.redis.enabled) or (enableHA is defined and enableHA) %}
+{% if (common.redis is defined and common.redis.enabled is defined and common.redis.enabled) or (enableHA is defined and enableHA | bool) %}
     cache:
       type: redis
       options:

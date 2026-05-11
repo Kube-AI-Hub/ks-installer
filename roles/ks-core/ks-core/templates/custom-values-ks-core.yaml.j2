@@ -65,7 +65,7 @@ controller:
     requests:
       cpu: {{ common.core.controllerManager.resources.requests.cpu | default('30m') }}
       memory: {{ common.core.controllerManager.resources.requests.memory | default('50Mi') }}
-{% if (common.redis is defined and common.redis.enabled is defined and common.redis.enabled) or (enableHA is defined and enableHA) %}
+{% if (common.redis is defined and common.redis.enabled is defined and common.redis.enabled) or (enableHA is defined and enableHA | bool) %}
 env:
 - name: KUBESPHERE_CACHE_OPTIONS_PASSWORD
   valueFrom:
