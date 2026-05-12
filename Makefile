@@ -1,6 +1,9 @@
 REPO?=watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub
 TAG?=$(shell git rev-parse --abbrev-ref HEAD | sed -e 's/\//-/g')-dev-$(shell git rev-parse --short HEAD)
+SHELL_OPERATOR_VERSION?=v1.16.4-log-3
 CONTAINER_CLI?=docker
+# Repo root (parent of ks-installer); required for Dockerfile.shelloperator COPY shell-operator/
+REPO_ROOT:=$(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
 
 build:
 	$(CONTAINER_CLI) build . --file Dockerfile --build-arg SHELL_OPERATOR_IMAGE=$(REPO)/shell-operator:$(TAG) --tag $(REPO)/ks-installer:$(TAG)
@@ -10,8 +13,11 @@ push-multiarch:
 	$(CONTAINER_CLI) buildx build . --file Dockerfile --tag $(REPO)/ks-installer:$(TAG) --platform linux/amd64,linux/arm64 --push
 all: build push
 
+# Absolute -f so builds work when make is run from ks-installer/ (relative -f is cwd-based).
+SHELL_OPERATOR_DOCKERFILE:=$(abspath $(dir $(lastword $(MAKEFILE_LIST)))/Dockerfile.shelloperator)
+
 build-shelloperator-multiarch:
-	$(CONTAINER_CLI) buildx build . --file Dockerfile.shelloperator --tag $(REPO)/shell-operator:$(TAG) --platform linux/amd64,linux/arm64
+	$(CONTAINER_CLI) buildx build $(REPO_ROOT) -f $(SHELL_OPERATOR_DOCKERFILE) --tag $(REPO)/shell-operator:$(SHELL_OPERATOR_VERSION) --platform linux/amd64,linux/arm64
 
 push-shelloperator-multiarch:
-	$(CONTAINER_CLI) buildx build . --file Dockerfile.shelloperator --tag $(REPO)/shell-operator:$(TAG) --platform linux/amd64,linux/arm64 --push
+	$(CONTAINER_CLI) buildx build $(REPO_ROOT) -f $(SHELL_OPERATOR_DOCKERFILE) --tag $(REPO)/shell-operator:$(SHELL_OPERATOR_VERSION) --platform linux/amd64,linux/arm64 --push

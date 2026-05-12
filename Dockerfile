@@ -1,4 +1,4 @@
-ARG SHELL_OPERATOR_IMAGE=watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/shell-operator:v1.16.4-log-2
+ARG SHELL_OPERATOR_IMAGE=watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/shell-operator:v1.16.4-log-3
 FROM ${SHELL_OPERATOR_IMAGE}
 
 ENV ANSIBLE_ROLES_PATH=/kubesphere/installer/roles
