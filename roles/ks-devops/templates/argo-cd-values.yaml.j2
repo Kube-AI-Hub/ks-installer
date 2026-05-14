@@ -23,6 +23,7 @@ applicationSet:
 redis:
   image:
     repository: "{{ argocd_redis_repo }}"
+    tag: "{{ argocd_redis_tag }}"
 
 repoServer:
   readinessProbe:
