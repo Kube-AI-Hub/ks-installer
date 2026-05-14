@@ -186,6 +186,130 @@ def delete_cluster_configuration(api):
     logging.info("Delete old cluster configuration successfully")
 
 
+def _ansible_task_artifact_root(private_data_dir, task_name):
+    """Resolve ansible-runner artifact dir (contains job_events/, stdout)."""
+    tn = str(task_name)
+    candidates = [
+        os.path.join(private_data_dir, tn, tn),
+        os.path.join(private_data_dir, tn),
+    ]
+    for c in candidates:
+        if os.path.isdir(os.path.join(c, "job_events")):
+            return c
+    base = os.path.join(private_data_dir, tn)
+    if not os.path.isdir(base):
+        return None
+    try:
+        subs = sorted(
+            [s for s in os.listdir(base) if os.path.isdir(os.path.join(base, s))],
+            key=lambda s: os.path.getmtime(os.path.join(base, s)),
+            reverse=True,
+        )
+    except OSError:
+        return None
+    for sub in subs:
+        p = os.path.join(base, sub)
+        if os.path.isdir(os.path.join(p, "job_events")):
+            return p
+    return None
+
+
+def _sort_job_event_filenames(filenames):
+    def _key(name):
+        try:
+            return int(str(name).split("-", 1)[0])
+        except (ValueError, IndexError):
+            return 0
+
+    return sorted(filenames, key=_key)
+
+
+def log_ansible_task_failure(task_name, private_data_dir, max_stdout_lines=400):
+    """
+    Emit Ansible runner diagnostics through the logging module so they appear
+    in kubectl logs (same stream as INFO lines). Plain print() is easy to miss.
+    """
+    root = _ansible_task_artifact_root(private_data_dir, task_name)
+    logging.error("========== Ansible failure details (task=%s) ==========", task_name)
+    if root is None:
+        logging.error(
+            "Could not find ansible-runner artifacts under %s for task %s",
+            private_data_dir,
+            task_name,
+        )
+        logging.error("========== End failure details (task=%s) ==========", task_name)
+        return
+
+    stdout_path = os.path.join(root, "stdout")
+    if os.path.isfile(stdout_path):
+        try:
+            with open(stdout_path, "r", errors="replace") as sf:
+                lines = sf.readlines()
+            tail = "".join(lines[-max_stdout_lines:]).rstrip()
+            if tail:
+                logging.error("--- ansible stdout (last %d lines) ---\n%s", min(len(lines), max_stdout_lines), tail)
+        except OSError as exc:
+            logging.error("Failed to read stdout (%s): %s", stdout_path, exc)
+
+    job_dir = os.path.join(root, "job_events")
+    if not os.path.isdir(job_dir):
+        logging.error("No job_events directory at %s", job_dir)
+        logging.error("========== End failure details (task=%s) ==========", task_name)
+        return
+
+    try:
+        names = [n for n in os.listdir(job_dir) if not n.startswith(".")]
+    except OSError as exc:
+        logging.error("Failed to list job_events: %s", exc)
+        logging.error("========== End failure details (task=%s) ==========", task_name)
+        return
+
+    if not names:
+        logging.error("job_events directory is empty: %s", job_dir)
+        logging.error("========== End failure details (task=%s) ==========", task_name)
+        return
+
+    ordered = _sort_job_event_filenames(names)
+    chosen = None
+    for fname in reversed(ordered):
+        fpath = os.path.join(job_dir, fname)
+        try:
+            with open(fpath, "r", errors="replace") as jf:
+                ev = json.load(jf)
+        except (json.JSONDecodeError, OSError):
+            continue
+        event = ev.get("event") or ""
+        if event in ("runner_on_failed", "runner_item_on_failed"):
+            chosen = ev
+            break
+        if event == "runner_on_unreachable":
+            chosen = ev
+            break
+        if event == "playbook_on_stats" and chosen is None:
+            chosen = ev
+
+    if chosen is None:
+        for fname in reversed(ordered):
+            fpath = os.path.join(job_dir, fname)
+            try:
+                with open(fpath, "r", errors="replace") as jf:
+                    chosen = json.load(jf)
+                break
+            except (json.JSONDecodeError, OSError):
+                continue
+
+    if chosen is not None:
+        try:
+            logging.error(
+                "--- ansible job_event ---\n%s",
+                json.dumps(chosen, sort_keys=True, indent=2, ensure_ascii=False),
+            )
+        except (TypeError, ValueError):
+            logging.error("--- ansible job_event (raw repr) ---\n%s", repr(chosen))
+
+    logging.error("========== End failure details (task=%s) ==========", task_name)
+
+
 def getResultInfo():
     # Execute and add the installation task process
     taskProcessList = []
@@ -213,6 +337,8 @@ def getResultInfo():
                     len(completedTasks) + 1,
                     len(taskProcessList)
                 )
+                if result != 0:
+                    log_ansible_task_failure(taskName, privateDataDir)
                 completedTasks.append({taskName: result})
 
         if len(completedTasks) == taskProcessListLen:
@@ -228,26 +354,6 @@ def getResultInfo():
 
         if taskRC != 0:
             resultState = resultState or True
-            resultInfoPath = os.path.join(
-                privateDataDir,
-                str(taskName),
-                str(taskName),
-                'job_events'
-            )
-            if os.path.exists(resultInfoPath):
-                jobList = os.listdir(resultInfoPath)
-                jobList.sort(
-                    key=lambda x: int(x.split('-')[0])
-                )
-
-                errorEventFile = os.path.join(resultInfoPath, jobList[-2])
-                with open(errorEventFile, 'r') as f:
-                    failedEvent = json.load(f)
-                print("\n")
-                print("Task '{}' failed:".format(taskName))
-                print('*' * 150)
-                print(json.dumps(failedEvent, sort_keys=True, indent=2))
-                print('*' * 150)
     return resultState
 
 
