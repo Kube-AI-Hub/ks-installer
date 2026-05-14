@@ -6,6 +6,11 @@ image:
   tag: 1.3.0
   pullPolicy: IfNotPresent
 
+# Image for helm test hook (templates/tests/test-connection.yaml)
+testImage:
+  repository: busybox
+  tag: "1.37.0"
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
@@ -20,6 +25,11 @@ ldap:
   organisation: kubesphere
   domain: kubesphere.io
   adminPassword: admin
+
+persistence:
+  enabled: true
+  storageClass: ""
+  size: 2Gi
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious

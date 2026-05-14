@@ -6,6 +6,10 @@ image:
   tag: {{ openldap_tag }}
   pullPolicy: IfNotPresent
 
+testImage:
+  repository: "{{ busybox_repo }}"
+  tag: "{{ busybox_tag }}"
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
