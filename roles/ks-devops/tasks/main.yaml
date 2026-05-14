@@ -209,6 +209,7 @@
 
     # Import the templates seperately due the potential webhook issues
     rm -rf s2i-templates
+    mkdir -p s2i-templates
     helm template  $charts_folder/ks-devops/charts/s2i/ \
       -f {{ kubesphere_dir }}/ks-devops/ks-devops-values.yaml \
       -s templates/binary.yaml \
