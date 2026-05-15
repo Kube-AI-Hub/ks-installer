@@ -79,21 +79,14 @@ nodeAffinity:
   {{ common.core.nodeAffinity | to_nice_yaml(indent=2) | indent(2) }}
 {% else %}
 nodeAffinity:
-  preferredDuringSchedulingIgnoredDuringExecution:
-  - weight: 100
-    preference:
-      matchExpressions:
+  requiredDuringSchedulingIgnoredDuringExecution:
+    nodeSelectorTerms:
+    - matchExpressions:
       - key: node-role.kubernetes.io/control-plane
-        operator: In
-        values:
-        - ""
-  - weight: 100
-    preference:
-      matchExpressions:
+        operator: Exists
+    - matchExpressions:
       - key: node-role.kubernetes.io/master
-        operator: In
-        values:
-        - ""
+        operator: Exists
 {% endif %}
 
 {% if common.core.nodeSelector is defined and common.core.nodeSelector is not none %}

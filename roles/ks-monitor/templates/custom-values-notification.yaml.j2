@@ -52,7 +52,19 @@ operator:
   tolerations:
     {{ tolerations | to_nice_yaml(indent=2) | indent(4) }}
 {% else %}
-  tolerations: []
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      effect: NoSchedule
+    - key: CriticalAddonsOnly
+      operator: Exists
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 60
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 60
 {% endif %}
 {% if monitoring.affinity is defined and monitoring.affinity is not none %}
   affinity:
@@ -61,7 +73,16 @@ operator:
   affinity:
     {{ affinity | to_nice_yaml(indent=2) | indent(4) }}
 {% else %}
-  affinity: {}
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: node-role.kubernetes.io/control-plane
+            operator: In
+            values:
+            - ""
 {% endif %}
 
 
@@ -100,7 +121,19 @@ notificationmanager:
   tolerations:
     {{ tolerations | to_nice_yaml(indent=2) | indent(4) }}
 {% else %}
-  tolerations: []
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      effect: NoSchedule
+    - key: CriticalAddonsOnly
+      operator: Exists
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 60
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 60
 {% endif %}
 {% if monitoring.affinity is defined and monitoring.affinity is not none %}
   affinity:
@@ -109,7 +142,16 @@ notificationmanager:
   affinity:
     {{ affinity | to_nice_yaml(indent=2) | indent(4) }}
 {% else %}
-  affinity: {}
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: node-role.kubernetes.io/control-plane
+            operator: In
+            values:
+            - ""
 {% endif %}
   defaultConfigSelector:
     matchLabels:

@@ -116,4 +116,21 @@
   register: init_result
   failed_when: "init_result.stderr and 'already exists' not in init_result.stderr"
 
+# Sync redis password from redis-secret to kubesphere-config
+- name: Redis | Getting redis password from secret
+  shell: >-
+    {{ bin_dir }}/kubectl get secret redis-secret -n kubesphere-system -o jsonpath='{.data.auth}' | base64 -d
+  register: redis_password
+  when: >-
+    (common.redis is defined and common.redis.enabled is defined and common.redis.enabled) or (enableHA is defined and enableHA | bool)
+
+- name: Redis | Update kubesphere-config with redis password
+  shell: >-
+    CURRENT=$({{ bin_dir }}/kubectl get cm kubesphere-config -n kubesphere-system -o jsonpath='{.data.kubesphere\\.yaml}') && \
+    NEW=$(echo "$CURRENT" | sed "s/KUBESPHERE_CACHE_OPTIONS_PASSWORD/{{ redis_password.stdout }}/g") && \
+    {{ bin_dir }}/kubectl patch cm kubesphere-config -n kubesphere-system --type merge -p "{\\"data\\":{\\"kubesphere.yaml\\": \"\"" + "$(echo \"$NEW\" | {{ bin_dir }}/python3 -c 'import sys,json; print(json.dumps(sys.stdin.read())[1:-1])')" + "\"" + }}"
+  when: >-
+    redis_password is defined and redis_password.stdout is defined and redis_password.stdout != ""
+  ignore_errors: true
+
 - import_tasks: ks-restart.yaml
