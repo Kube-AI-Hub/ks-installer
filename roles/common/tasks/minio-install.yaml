@@ -16,14 +16,72 @@
 
 - name: KubeAIHub | Checking minio
   shell: >
-    {{ bin_dir }}/helm list -n kubesphere-system | grep "ks-minio"
+    {{ bin_dir }}/helm list -a -n kubesphere-system | grep "ks-minio"
   register: minio_check
   failed_when: false
 
 
+- name: KubeAIHub | Checking MinIO pod readiness for target release
+  shell: >
+    TARGET_IMAGE="{{ minio_repo }}:{{ minio_tag }}";
+    {{ bin_dir }}/kubectl get pod -n kubesphere-system -l app=minio
+    -o jsonpath='{range .items[*]}{.spec.containers[0].image}{" "}{.status.containerStatuses[0].ready}{"\n"}{end}'
+    | while read image ready; do
+        if [ "$image" = "$TARGET_IMAGE" ]; then
+          echo "$ready";
+          exit 0;
+        fi;
+      done;
+    echo "false"
+  register: minio_pod_ready_check
+  failed_when: false
+  changed_when: false
+
+
+- name: KubeAIHub | Checking if legacy MinIO format migration is needed
+  set_fact:
+    minio_needs_legacy_migration: >-
+      {{
+        minio_check.stdout.find("ks-minio") != -1 and (
+          minio_check.stdout.find("RELEASE.2019") != -1 or
+          minio_check.stdout.find("pending-upgrade") != -1 or
+          minio_check.stdout.find("failed") != -1 or
+          minio_check.stdout.find(minio_tag) == -1 or
+          (minio_pod_ready_check.stdout | default('false') | trim) != "true"
+        )
+      }}
+    minio_upgrade_required: >-
+      {{
+        minio_check.stdout.find("ks-minio") == -1 or
+        minio_check.stdout.find(minio_tag) == -1 or
+        minio_check.stdout.find("pending-upgrade") != -1 or
+        minio_check.stdout.find("failed") != -1 or
+        (
+          minio_check.stdout.find("ks-minio") != -1 and
+          (minio_pod_ready_check.stdout | default('false') | trim) != "true"
+        )
+      }}
+
+
 - block:
+    - name: KubeAIHub | Migrating legacy MinIO backend format before upgrade
+      include_tasks: minio-legacy-format-migration.yaml
+      when: minio_needs_legacy_migration | bool
+
+    - name: KubeAIHub | Abort MinIO upgrade when legacy migration did not complete
+      fail:
+        msg: >-
+          MinIO legacy format migration did not complete.
+          Check: kubectl logs -n kubesphere-system job/minio-legacy-backup;
+          kubectl logs -n kubesphere-system pod/minio-legacy-reader
+      when:
+        - minio_needs_legacy_migration | bool
+        - not minio_legacy_migration | default(false) | bool
+
     - name: KubeAIHub | Deploying minio
       shell: >
+        {{ bin_dir }}/kubectl delete job minio-make-bucket-job
+        -n kubesphere-system --ignore-not-found &&
         {{ bin_dir }}/helm upgrade --install ks-minio
         {{ kubesphere_dir }}/minio-ha
         -f {{ kubesphere_dir }}/custom-values-minio.yaml
@@ -33,6 +91,12 @@
       register: minio_status
       failed_when: false
 
+    - name: KubeAIHub | Restoring MinIO data after legacy format migration
+      include_tasks: minio-legacy-restore.yaml
+      when:
+        - minio_legacy_migration | default(false) | bool
+        - minio_status.rc == 0
+
 
     - debug:
         msg:
@@ -41,14 +105,15 @@
          - 3. execute 'kubectl logs -n kubesphere-system -l job-name=minio-make-bucket-job' to watch logs
          - 4. execute 'helm -n kubesphere-system uninstall ks-minio && kubectl -n kubesphere-system delete job minio-make-bucket-job'
          - 5. Restart the installer pod in kubesphere-system namespace
-      when: minio_status.rc != 0
+         - 6. for legacy migration issues, check 'kubectl logs -n kubesphere-system job/minio-legacy-backup'
+      when:
+        - minio_status.rc != 0
 
 
     - fail:
         msg: "It is suggested to refer to the above methods for troubleshooting problems ."
       when: minio_status.rc != 0
-  when:
-    - (minio_check.stdout.find("deployed") == -1) or (minio_check.stdout.find("RELEASE.2019-08-07T01-59-21Z") == -1)
+  when: minio_upgrade_required | bool
 
 
 - name: KubeAIHub | Importing minio status

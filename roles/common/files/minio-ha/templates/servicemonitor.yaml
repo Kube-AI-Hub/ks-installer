@@ -17,7 +17,7 @@ metadata:
 spec:
   endpoints:
     - port: service
-      path: /minio/prometheus/metrics
+      path: /minio/v2/metrics/cluster
       {{- if .Values.metrics.serviceMonitor.interval }}
       interval: {{ .Values.metrics.serviceMonitor.interval }}
       {{- end }}

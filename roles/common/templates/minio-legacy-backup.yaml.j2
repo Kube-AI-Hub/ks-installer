@@ -1,0 +1,59 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-backup
+  namespace: kubesphere-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {% if minio_storage_pv_size is defined %}{{ minio_storage_pv_size }}{% else %}{{ common.minio.volumeSize | default("20Gi") }}{% endif %}
+
+{% if persistence.storageClass is defined and persistence.storageClass != "" %}
+  storageClassName: "{{ persistence.storageClass }}"
+{% endif %}
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-legacy-backup
+  namespace: kubesphere-system
+  labels:
+    app: minio-legacy-migration
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: minio-legacy-migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: "{{ mc_repo }}:{{ mc_tag }}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              mc alias set src http://minio-legacy-reader.kubesphere-system.svc:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}"
+              mc ls src/
+              mc mirror --preserve --overwrite src/ /backup/
+              echo "Backup completed."
+              du -sh /backup/
+          env:
+            - name: MINIO_ROOT_USER
+              value: "openpitrixminioaccesskey"
+            - name: MINIO_ROOT_PASSWORD
+              value: "openpitrixminiosecretkey"
+          volumeMounts:
+            - name: backup
+              mountPath: /backup
+      volumes:
+        - name: backup
+          persistentVolumeClaim:
+            claimName: minio-backup

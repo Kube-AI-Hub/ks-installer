@@ -6,7 +6,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: minio/minio
-  tag: RELEASE.2019-08-07T01-59-21Z
+  tag: RELEASE.2025-09-07T16-13-09Z
   pullPolicy: IfNotPresent
 
 ## Set default image, imageTag, and imagePullPolicy for the `mc` (the minio
@@ -14,7 +14,7 @@ image:
 ##
 mcImage:
   repository: minio/mc
-  tag: RELEASE.2019-08-07T23-14-43Z
+  tag: RELEASE.2025-08-13T08-35-41Z
   pullPolicy: IfNotPresent
 
 ## minio server mode, i.e. standalone or distributed.
@@ -162,8 +162,10 @@ readinessProbe:
 ##
 resources:
   requests:
-    memory: 256Mi
+    memory: 512Mi
     cpu: 250m
+  limits:
+    memory: 2Gi
 
 ## Create a bucket after minio install
 ##

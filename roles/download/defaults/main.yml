@@ -98,9 +98,10 @@ openpitrix_job_tag: "v3.3.2"
 openpitrix_job_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/openpitrix-jobs"
 
 minio_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/minio/minio"
-minio_tag: RELEASE.2019-08-07T01-59-21Z
+minio_tag: RELEASE.2025-09-07T16-13-09Z
+minio_legacy_tag: RELEASE.2019-08-07T01-59-21Z
 mc_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/minio/mc"
-mc_tag: RELEASE.2019-08-07T23-14-43Z
+mc_tag: RELEASE.2025-08-13T08-35-41Z
 
 snapshot_controller_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/csiplugin/snapshot-controller"
 snapshot_controller_tag: "v4.0.0"

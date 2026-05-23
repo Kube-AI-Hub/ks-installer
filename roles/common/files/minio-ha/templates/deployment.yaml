@@ -33,6 +33,9 @@ spec:
   {{- if .Values.ossgateway.enabled }}
   replicas: {{ .Values.ossgateway.replicas }}
   {{- end }}
+  {{- if and (eq .Values.mode "standalone") (not .Values.nasgateway.enabled) (not .Values.s3gateway.enabled) (not .Values.azuregateway.enabled) (not .Values.gcsgateway.enabled) (not .Values.ossgateway.enabled) }}
+  replicas: 1
+  {{- end }}
   selector:
     matchLabels:
       app: {{ template "minio.name" . }}
@@ -56,11 +59,19 @@ spec:
   {{- if .Values.priorityClassName }}
       priorityClassName: "{{ .Values.priorityClassName }}"
   {{- end }}
+{{- if .Values.podSecurityContext }}
+      securityContext:
+{{ toYaml .Values.podSecurityContext | indent 8 }}
+{{- end }}
       serviceAccountName: {{ include "minio.serviceAccountName" . | quote }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.securityContext }}
+          securityContext:
+{{ toYaml .Values.securityContext | indent 12 }}
+          {{- end }}
           {{- if .Values.s3gateway.enabled }}
           command: [ "/bin/sh",
           "-ce",
@@ -86,9 +97,11 @@ spec:
           "-ce", 
           "/usr/bin/docker-entrypoint.sh minio -C {{ .Values.configPath }} gateway nas {{ .Values.mountPath }}" ]
           {{- else }}
-          command: [ "/bin/sh", 
-          "-ce", 
-          "/usr/bin/docker-entrypoint.sh minio -C {{ .Values.configPath }} server {{ .Values.mountPath }}" ]
+          args:
+            - server
+            - {{ .Values.mountPath | quote }}
+            - --console-address
+            - ":9001"
           {{- end }}
           {{- end }}
           {{- end }}
@@ -121,12 +134,12 @@ spec:
             - name: service
               containerPort: 9000
           env:
-            - name: MINIO_ACCESS_KEY
+            - name: MINIO_ROOT_USER
               valueFrom:
                 secretKeyRef:
                   name: {{ if .Values.existingSecret }}{{ .Values.existingSecret }}{{ else }}{{ template "minio.fullname" . }}{{ end }}
                   key: accesskey
-            - name: MINIO_SECRET_KEY
+            - name: MINIO_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ if .Values.existingSecret }}{{ .Values.existingSecret }}{{ else }}{{ template "minio.fullname" . }}{{ end }}

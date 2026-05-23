@@ -5,12 +5,12 @@ set -e ; # Have script exit in the event of a failed command.
 # Use a check-sleep-check loop to wait for Minio service to be available
 connectToMinio() {
   SCHEME=$1
-  ATTEMPTS=0 ; LIMIT=29 ; # Allow 30 attempts
+  ATTEMPTS=0 ; LIMIT=59 ; # Allow 60 attempts
   set -e ; # fail if we can't read the keys.
   ACCESS=$(cat /config/accesskey) ; SECRET=$(cat /config/secretkey) ;
   set +e ; # The connections to minio are allowed to fail.
   echo "Connecting to Minio server: $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT" ;
-  MC_COMMAND="mc config host add myminio $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT $ACCESS $SECRET" ;
+  MC_COMMAND="mc alias set myminio $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT $ACCESS $SECRET" ;
   $MC_COMMAND ;
   STATUS=$? ;
   until [ $STATUS = 0 ]
@@ -67,7 +67,7 @@ createBucket() {
   # At this point, the bucket should exist, skip checking for existence
   # Set policy on the bucket
   echo "Setting policy of bucket '$BUCKET' to '$POLICY'."
-  /usr/bin/mc policy set $POLICY myminio/$BUCKET
+  /usr/bin/mc anonymous set $POLICY myminio/$BUCKET
 }
 
 # Try connecting to Minio instance

@@ -1,0 +1,26 @@
+---
+- name: KubeAIHub | Restoring MinIO data after legacy format migration
+  shell: >
+    {{ bin_dir }}/kubectl delete job minio-legacy-restore
+    -n kubesphere-system --ignore-not-found &&
+    {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/minio-legacy-restore.yaml &&
+    {{ bin_dir }}/kubectl wait --for=condition=complete job/minio-legacy-restore
+    -n kubesphere-system --timeout=1800s
+  when:
+    - minio_legacy_migration is defined
+    - minio_legacy_migration
+
+- name: KubeAIHub | Cleaning up legacy migration backup PVC
+  shell: >
+    {{ bin_dir }}/kubectl delete job minio-legacy-backup minio-legacy-restore
+    -n kubesphere-system --ignore-not-found &&
+    {{ bin_dir }}/kubectl wait --for=delete pod
+    -l job-name=minio-legacy-backup -n kubesphere-system --timeout=120s &&
+    {{ bin_dir }}/kubectl wait --for=delete pod
+    -l job-name=minio-legacy-restore -n kubesphere-system --timeout=120s &&
+    {{ bin_dir }}/kubectl delete pvc minio-backup
+    -n kubesphere-system --ignore-not-found --wait=false
+  failed_when: false
+  when:
+    - minio_legacy_migration is defined
+    - minio_legacy_migration
