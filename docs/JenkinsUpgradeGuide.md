@@ -101,7 +101,7 @@ It's ready if you can see something like below from the logs output:
 
 ```text
 #####################################################
-###              Welcome to KubeSphere!           ###
+###              Welcome to Kube AI Hub!          ###
 #####################################################
 ```
 
