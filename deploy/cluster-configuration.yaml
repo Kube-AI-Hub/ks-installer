@@ -101,6 +101,13 @@ spec:
           memoryUnit: Mi
           memoryName: huawei.com/Ascend310P-memory
 
+        - resourceName: huawei.com/Ascend310P48
+          displayName: "NPU310P48 - Ascend/昇腾"
+          resourceType: NPU
+          default: False
+          memoryUnit: Mi
+          memoryName: huawei.com/Ascend310P48-memory
+
         - resourceName: huawei.com/Ascend910B
           displayName: "NPU910B - Ascend/昇腾"
           resourceType: NPU
