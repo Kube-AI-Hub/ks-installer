@@ -10,9 +10,13 @@
   when:
     - "servicemesh.enabled is defined and servicemesh.enabled"
 
+# GPU rules must not wait for status.monitoring=enabled, and must run before
+# notification-manager. A failed helm hook used to abort the playbook here and
+# leave cluster-gpu-k8s-rules unapplied.
 - import_tasks: gpu-monitoring.yaml
   when:
-    - "status.monitoring is not defined or status.monitoring.status is not defined or status.monitoring.status != 'enabled'"
+    - monitoring.gpu is defined
+    - monitoring.gpu.enabled | default(false) | bool
 
 - name: Monitoring | Importing ks-monitoring status
   shell: >
@@ -25,6 +29,10 @@
   until: cc_result is succeeded
   retries: 5
   delay: 3
+
+- import_tasks: notification-manager.yaml
+  when:
+    - "common.monitoring.type is not defined or common.monitoring.type != 'external'"
 
 - import_tasks: thanos-ruler.yaml
   when:

@@ -15,7 +15,7 @@
 
 - name: notification-manager | Checking notification-manager
   shell: >
-    {{ bin_dir }}/helm list -f notification-manager -n kubesphere-monitoring-system
+    {{ bin_dir }}/helm list -f '^notification-manager$' -n kubesphere-monitoring-system
   register: notification_check
   failed_when: notification_check.rc != 0
 
@@ -45,19 +45,20 @@
   register: patch_crd_cabundle
   changed_when: patch_crd_cabundle.rc == 0
 
+# Always upgrade --install. Do not skip on chart version 2.3.x: a failed
+# release still lists 2.3.0 and used to permanently skip retries. tls.yaml was
+# removed in 2.3.1; existing clusters need this upgrade to drop the duplicate Secret.
 - name: notification-manager | Deploying notification-manager
   shell: >
     {{ bin_dir }}/helm upgrade --install notification-manager
     {{ kubesphere_dir }}/notification-manager
     -f {{ kubesphere_dir }}/notification-manager/custom-values-notification.yaml
     -n kubesphere-monitoring-system
-    --force
   register: deploy_result
   until: deploy_result is succeeded
   retries: 3
   delay: 10
   when:
     - notification_check.rc == 0
-    - notification_check.stdout.find("2.3.0") == -1
 
 
