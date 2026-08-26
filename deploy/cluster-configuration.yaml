@@ -143,6 +143,14 @@ spec:
           memoryUnit: Mi
           memoryName: huawei.com/Ascend910B4-1-memory
 
+        - resourceName: huawei.com/Ascend910C
+          displayName: "NPU910C - Ascend/昇腾"
+          resourceType: NPU
+          default: False
+          memoryUnit: Mi
+          memoryName: huawei.com/Ascend910C-memory
+          vcoresName: huawei.com/Ascend910C-core
+
         # 海光DCU虚拟卡
         - resourceName: hygon.com/dcunum
           displayName: "DCU - Hygon/海光"
