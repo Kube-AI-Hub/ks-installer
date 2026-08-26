@@ -149,7 +149,6 @@ spec:
           default: False
           memoryUnit: Mi
           memoryName: huawei.com/Ascend910C-memory
-          vcoresName: huawei.com/Ascend910C-core
 
         # 海光DCU虚拟卡
         - resourceName: hygon.com/dcunum
