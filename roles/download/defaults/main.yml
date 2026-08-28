@@ -203,7 +203,10 @@ opensearch_tag: 2.6.0
 opensearch_dashboards_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/opensearchproject/opensearch-dashboards"
 opensearch_dashboards_tag: 2.6.0
 ks_fluent_bit_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/fluent-bit"
-ks_fluent_bit_tag: "v1.9.4"
+# v5.1.1 rebuilt with jemalloc --with-lg-page=16 for Kylin v10 ARM64 (PAGESIZE=65536).
+# Official images abort with "<jemalloc>: Unsupported system page size".
+# Build/push: ks-installer/build/fluent-bit/build.sh
+ks_fluent_bit_tag: "v5.1.1-kah"
 ks_log_sidecar_injector_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/log-sidecar-injector"
 ks_log_sidecar_injector_tag: v1.2.0
 filebeat_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/elastic/filebeat"
