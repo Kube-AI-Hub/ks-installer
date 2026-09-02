@@ -1,6 +1,7 @@
 REPO?=watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub
 TAG?=$(shell git rev-parse --abbrev-ref HEAD | sed -e 's/\//-/g')-dev-$(shell git rev-parse --short HEAD)
 SHELL_OPERATOR_VERSION?=v1.16.4-log-3
+FLUENT_BIT_VERSION?=v5.1.1-kah
 CONTAINER_CLI?=docker
 # Repo root (parent of ks-installer); required for Dockerfile.shelloperator COPY shell-operator/
 REPO_ROOT:=$(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
@@ -25,4 +26,4 @@ push-shelloperator-multiarch:
 
 # fluent-bit with jemalloc 64KiB pages (Kylin v10 ARM64). See build/fluent-bit/.
 push-fluent-bit-multiarch:
-	cd $(FLUENT_BIT_DIR) && DEBIAN_MIRROR=mirrors.aliyun.com ./build.sh
+	cd $(FLUENT_BIT_DIR) && REGISTRY=$(REPO) VERSION=$(FLUENT_BIT_VERSION) DEBIAN_MIRROR=mirrors.aliyun.com ./build.sh
