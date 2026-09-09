@@ -356,6 +356,16 @@ spec:
     #     resources: {}
     gpu:  # When enabled: gpu-agent ServiceMonitor, GPU PrometheusRules, dashboards, and kubesphere-config enableGPUMonitoring.
       enabled: true
+  # metering:  # Optional resource consumption prices. GPU allocation is billed; utilisation is not.
+  #   retentionDay: 7d
+  #   billing:
+  #     priceInfo:
+  #       cpuPerCorePerHour: 0
+  #       memPerGigabytesPerHour: 0
+  #       gpuPerCardPerHour: 0
+  #       gpuMemPerGigabytesPerHour: 0
+  #       gpuModelPrices: {}
+  #       currencyUnit: ""
   multicluster:
     clusterRole: none  # host | member | none  # You can install a solo cluster, or specify it as the Host or Member Cluster.
   network:

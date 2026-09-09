@@ -44,6 +44,16 @@ config:
   multicluster: {}
   monitoring: {}
   notification: {}
+  metering: {}
+  # retentionDay: 7d
+  # billing:
+  #   priceInfo:
+  #     cpuPerCorePerHour: 0
+  #     memPerGigabytesPerHour: 0
+  #     gpuPerCardPerHour: 0
+  #     gpuMemPerGigabytesPerHour: 0
+  #     gpuModelPrices: {}
+  #     currencyUnit: ""
   # Omitted keys default to enabled=true and url http://csghub-server.csghub:8080 (template + ks-apiserver).
   platformModel:
     enabled: true

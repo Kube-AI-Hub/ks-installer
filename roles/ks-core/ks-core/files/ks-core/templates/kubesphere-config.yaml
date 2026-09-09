@@ -40,4 +40,9 @@ data:
       {{- toYaml . | nindent 6 }}
     {{- end }}
 
+    {{- with .Values.config.metering }}
+    metering:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
 {{- end }}

@@ -135,6 +135,26 @@ data:
 {% else %}
       enableGPUMonitoring: false
 {% endif %}
+{% if metering is defined %}
+    metering:
+      retentionDay: {{ metering.retentionDay | default('7d') }}
+      billing:
+        priceInfo:
+          cpuPerCorePerHour: {{ metering.billing.priceInfo.cpuPerCorePerHour | default(0) }}
+          memPerGigabytesPerHour: {{ metering.billing.priceInfo.memPerGigabytesPerHour | default(0) }}
+          ingressNetworkTrafficPerMegabytesPerHour: {{ metering.billing.priceInfo.ingressNetworkTrafficPerMegabytesPerHour | default(0) }}
+          egressNetworkTrafficPerMegabytesPerHour: {{ metering.billing.priceInfo.egressNetworkTrafficPerMegabytesPerHour | default(0) }}
+          pvcPerGigabytesPerHour: {{ metering.billing.priceInfo.pvcPerGigabytesPerHour | default(0) }}
+          gpuPerCardPerHour: {{ metering.billing.priceInfo.gpuPerCardPerHour | default(0) }}
+          gpuMemPerGigabytesPerHour: {{ metering.billing.priceInfo.gpuMemPerGigabytesPerHour | default(0) }}
+          currencyUnit: {{ metering.billing.priceInfo.currencyUnit | default('') | tojson }}
+{% if metering.billing.priceInfo.gpuModelPrices is defined %}
+          gpuModelPrices:
+{% for model, price in metering.billing.priceInfo.gpuModelPrices.items() %}
+            {{ model | tojson }}: {{ price }}
+{% endfor %}
+{% endif %}
+{% endif %}
 {% if common.gpu is defined and common.gpu.kinds is defined %}
     gpu:
       kinds:

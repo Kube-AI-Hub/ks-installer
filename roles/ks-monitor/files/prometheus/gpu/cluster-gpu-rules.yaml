@@ -234,3 +234,107 @@ spec:
       expr: |
         (sum(gpu_agent_card_allocation_rate) or vector(0))
         / (count(gpu_card_utilisation) or vector(1))
+
+    # ---- by-model variants (keep model label for billing breakdown) ----
+
+    # POD 级别 - 按卡型号
+    - record: pod:gpu_usage:count_by_model
+      expr: |
+        sum by (namespace, pod, vendor, model) (gpu_agent_pod_utilisation / 100)
+
+    - record: pod:gpu_memory_usage:bytes_by_model
+      expr: |
+        sum by (namespace, pod, vendor, model) (gpu_agent_pod_memory_used_bytes)
+
+    - record: pod:gpu_allocated:count_by_model
+      expr: |
+        sum by (namespace, pod, vendor, model) (gpu_agent_pod_gpu_allocation)
+
+    # Namespace 级别 - 按卡型号
+    - record: namespace:gpu_usage:count_by_model
+      expr: |
+        sum by (namespace, vendor, model) (
+          pod:gpu_usage:count_by_model
+        )
+
+    - record: namespace:gpu_memory_usage:bytes_by_model
+      expr: |
+        sum by (namespace, vendor, model) (
+          pod:gpu_memory_usage:bytes_by_model
+        )
+
+    - record: namespace:gpu_allocated:count_by_model
+      expr: |
+        sum by (namespace, vendor, model) (
+          pod:gpu_allocated:count_by_model
+        )
+
+    # Workload 级别 - 按卡型号
+    - record: namespace:workload:gpu_usage:count_by_model
+      expr: |
+        sum by (namespace, owner_kind, owner_name, vendor, model) (
+          pod:gpu_usage:count_by_model
+          * on(namespace, pod) group_left(owner_kind, owner_name) kube_pod_owner
+        )
+
+    - record: namespace:workload:gpu_memory_usage:bytes_by_model
+      expr: |
+        sum by (namespace, owner_kind, owner_name, vendor, model) (
+          pod:gpu_memory_usage:bytes_by_model
+          * on(namespace, pod) group_left(owner_kind, owner_name) kube_pod_owner
+        )
+
+    - record: namespace:workload:gpu_allocated:count_by_model
+      expr: |
+        sum by (namespace, owner_kind, owner_name, vendor, model) (
+          pod:gpu_allocated:count_by_model
+          * on(namespace, pod) group_left(owner_kind, owner_name) kube_pod_owner
+        )
+
+    # Workspace 级别 - 按卡型号
+    - record: workspace:gpu_usage:count_by_model
+      expr: |
+        sum by (workspace, vendor, model) (
+          namespace:gpu_usage:count_by_model
+          * on(namespace) group_left(workspace) kube_namespace_labels
+        )
+
+    - record: workspace:gpu_memory_usage:bytes_by_model
+      expr: |
+        sum by (workspace, vendor, model) (
+          namespace:gpu_memory_usage:bytes_by_model
+          * on(namespace) group_left(workspace) kube_namespace_labels
+        )
+
+    - record: workspace:gpu_allocated:count_by_model
+      expr: |
+        sum by (workspace, vendor, model) (
+          namespace:gpu_allocated:count_by_model
+          * on(namespace) group_left(workspace) kube_namespace_labels
+        )
+
+    # 节点级别 - 按卡型号
+    - record: node:gpu_usage:count_by_model
+      expr: |
+        sum by (node, vendor, model) (gpu_card_utilisation / 100)
+
+    - record: node:gpu_memory_usage:bytes_by_model
+      expr: |
+        sum by (node, vendor, model) (gpu_card_memory_used_bytes)
+
+    - record: node:gpu_allocated:count_by_model
+      expr: |
+        sum by (node, vendor, model) (gpu_agent_card_allocation_rate)
+
+    # 集群级别 - 按卡型号
+    - record: cluster:gpu_usage:count_by_model
+      expr: |
+        sum by (vendor, model) (gpu_card_utilisation / 100)
+
+    - record: cluster:gpu_memory_usage:bytes_by_model
+      expr: |
+        sum by (vendor, model) (gpu_card_memory_used_bytes)
+
+    - record: cluster:gpu_allocated:count_by_model
+      expr: |
+        sum by (vendor, model) (gpu_agent_card_allocation_rate)
