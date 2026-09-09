@@ -104,6 +104,4 @@ spec:
           path: /
         name: root
   updateStrategy:
-    rollingUpdate:
-      maxUnavailable: 10%
-    type: RollingUpdate
+    type: OnDelete

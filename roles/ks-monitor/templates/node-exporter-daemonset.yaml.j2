@@ -9,6 +9,8 @@ metadata:
   name: node-exporter
   namespace: kubesphere-monitoring-system
 spec:
+  updateStrategy:
+    type: OnDelete
   selector:
     matchLabels:
       app.kubernetes.io/component: exporter
