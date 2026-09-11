@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentbit-csghub-labels
+  namespace: kubesphere-logging-system
+  labels:
+    logging.kubesphere.io/enabled: "true"
+    logging.kubesphere.io/component: "logging"
+data:
+  keep_csghub_labels.lua: |
+    -- Keep only csghub_* pod labels so OpenSearch mappings stay small
+    -- while dataflow / finetune / evaluation can query csghub_df_argo_task_id.
+    function keep_csghub_labels(tag, timestamp, record)
+        local k8s = record["kubernetes"]
+        if type(k8s) ~= "table" then
+            return 1, timestamp, record
+        end
+        local labels = k8s["labels"]
+        if type(labels) ~= "table" then
+            return 1, timestamp, record
+        end
+        local kept = {}
+        local changed = false
+        for key, value in pairs(labels) do
+            if type(key) == "string" and string.sub(key, 1, 7) == "csghub_" then
+                kept[key] = value
+            else
+                changed = true
+            end
+        end
+        if not changed then
+            return 1, timestamp, record
+        end
+        k8s["labels"] = kept
+        record["kubernetes"] = k8s
+        return 2, timestamp, record
+    end

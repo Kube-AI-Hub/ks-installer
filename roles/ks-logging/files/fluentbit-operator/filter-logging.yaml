@@ -13,8 +13,13 @@ spec:
       kubeURL: https://kubernetes.default.svc:443
       kubeCAFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
       kubeTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-      labels: false
+      labels: true
       annotations: false
+  - lua:
+      script:
+        name: fluentbit-csghub-labels
+        key: keep_csghub_labels.lua
+      call: keep_csghub_labels
   - nest:
       operation: lift
       nestedUnder: kubernetes
