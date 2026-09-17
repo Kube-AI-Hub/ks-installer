@@ -200,6 +200,8 @@ notificationmanager:
       value: Asia/Shanghai
   sidecars:
      tenant:
+       name: tenant
+       type: kubesphere
        image:
          repo: {{ notification_tenant_sidecar_repo }}
          tag: {{ notification_tenant_sidecar_tag }}

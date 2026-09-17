@@ -5,6 +5,23 @@
     src: "notification-manager"
     dest: "{{ kubesphere_dir }}/"
 
+- name: notification-manager | Detect registry from the running manager
+  shell: >
+    {{ bin_dir }}/kubectl -n kubesphere-monitoring-system get deploy notification-manager-deployment
+    -o jsonpath='{.spec.template.spec.containers[0].image}'
+  register: nm_running_image
+  failed_when: false
+  changed_when: false
+
+- name: notification-manager | Keep the registry that already runs
+  set_fact:
+    notification_manager_repo: "{{ _nm_prefix }}/notification-manager"
+    notification_tenant_sidecar_repo: "{{ _nm_prefix }}/notification-tenant-sidecar"
+  vars:
+    _nm_prefix: "{{ nm_running_image.stdout | trim | regex_replace(':[^:]+$', '') | regex_replace('/notification-manager$', '') }}"
+  when:
+    - nm_running_image.stdout | default('') | trim != ''
+
 - name: notification-manager | Getting notification-manager installation files
   template:
     src: "{{ item.file }}.j2"
@@ -45,15 +62,28 @@
   register: patch_crd_cabundle
   changed_when: patch_crd_cabundle.rc == 0
 
+# Helm 3-way merge can emit sidecars.tenant.image without name/type; the CRD
+# requires both. Seed the live CR so the upgrade patch is valid.
+- name: notification-manager | Ensure tenant sidecar required fields
+  shell: |
+    IMAGE="{{ notification_tenant_sidecar_repo }}:{{ notification_tenant_sidecar_tag }}"
+    {{ bin_dir }}/kubectl patch notificationmanager notification-manager --type merge -p "{\"spec\":{\"sidecars\":{\"tenant\":{\"name\":\"tenant\",\"type\":\"kubesphere\",\"image\":\"${IMAGE}\"}}}}"
+  failed_when: false
+  when:
+    - notification_check.rc == 0
+
 # Always upgrade --install. Do not skip on chart version 2.3.x: a failed
 # release still lists 2.3.0 and used to permanently skip retries. tls.yaml was
 # removed in 2.3.1; existing clusters need this upgrade to drop the duplicate Secret.
+# --force replaces the NotificationManager instead of a 3-way merge that drops
+# CRD-required sidecar name/type.
 - name: notification-manager | Deploying notification-manager
   shell: >
     {{ bin_dir }}/helm upgrade --install notification-manager
     {{ kubesphere_dir }}/notification-manager
     -f {{ kubesphere_dir }}/notification-manager/custom-values-notification.yaml
     -n kubesphere-monitoring-system
+    --force
   register: deploy_result
   until: deploy_result is succeeded
   retries: 3

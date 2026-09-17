@@ -137,6 +137,8 @@
     {{ kubesphere_dir }}/ks-core/
     -f {{ kubesphere_dir }}/ks-core/custom-values-ks-core.yaml
     --namespace kubesphere-system
+  when:
+    - status.core is not defined or status.core.status is not defined or status.core.status != 'enabled'
   # register: source_state
   # failed_when: "source_state.stderr and 'already exists' not in source_state.stderr"
 

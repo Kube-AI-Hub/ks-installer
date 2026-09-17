@@ -110,8 +110,12 @@ jenkins:
     ldap:
       host: openldap.kubesphere-system.svc:389
   ContainerEnv:
+    # ks-jenkins 2.346 rejects duplicate LDAP configs. Chart default CASC is the
+    # casc_configs/ directory, which loads both jenkins.yaml and jenkins_user.yaml.
     - name: CASC_JENKINS_CONFIG
       value: /var/jenkins_home/casc_configs/jenkins.yaml
+    - name: CASC_MERGE_STRATEGY
+      value: override
     - name: com.sun.jndi.ldap.connect.timeout
       value: "15000"
     - name: com.sun.jndi.ldap.read.timeout

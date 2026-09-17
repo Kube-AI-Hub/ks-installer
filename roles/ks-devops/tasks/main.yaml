@@ -103,6 +103,28 @@
   set_fact:
     builder_container_runtime: "{{ container_runtime.stdout is search('docker://') | ternary('docker', 'podman') }}"
 
+# local_registry may be set without the DevOps images actually mirrored.
+# Keep the registry of a Ready apiserver so helm does not roll to ImagePullBackOff.
+- name: ks-devops | Detect registry from a Ready apiserver
+  shell: |
+    {{ bin_dir }}/kubectl -n kubesphere-devops-system get pods -o jsonpath='{range .items[*]}{.status.phase}{" "}{.status.containerStatuses[0].ready}{" "}{.spec.containers[0].image}{"\n"}{end}' \
+      | awk '$1=="Running" && $2=="true" && $3 ~ /\/devops-apiserver:/ {print $3; exit}'
+  register: devops_running_apiserver_image
+  failed_when: false
+  changed_when: false
+
+- name: ks-devops | Keep the registry that already runs
+  set_fact:
+    ks_devops_registry: "{{ _devops_image_prefix }}"
+    s2i_registry: "{{ _devops_image_prefix }}"
+    builder_registry: "{{ _devops_image_prefix }}"
+    jenkins_repo: "{{ _devops_image_prefix }}/ks-jenkins"
+    jnlp_slave_repo: "{{ _devops_image_prefix }}/jenkins/inbound-agent"
+  vars:
+    _devops_image_prefix: "{{ devops_running_apiserver_image.stdout | trim | regex_replace(':[^:]+$', '') | regex_replace('/devops-apiserver$', '') }}"
+  when:
+    - devops_running_apiserver_image.stdout | default('') | trim != ''
+
 - name: ks-devops | Creating manifests
   template:
     src: "{{ item.file }}.j2"
@@ -184,6 +206,7 @@
   register: argocd_upgrade_result
   until: argocd_upgrade_result is succeeded
   when:
+    - argocd_installation.stdout | default('') | trim != ''
     - argocd_installation.stdout != "custom"
   retries: 3
   delay: 10
@@ -201,6 +224,9 @@
 
     # Create or update CRDs manually
     tar xzvf $ks_devops_chart -C $charts_folder
+    # Chart default CASC path is the directory; 2.346 LDAP uniqueness then fails.
+    sed -i 's|value: "/var/jenkins_home/casc_configs/"|value: "/var/jenkins_home/casc_configs/jenkins.yaml"|' \
+      $charts_folder/ks-devops/charts/jenkins/values.yaml
     {{ bin_dir }}/kubectl apply -f $charts_folder/ks-devops/crds
     {{ bin_dir }}/kubectl apply -f $charts_folder/ks-devops/charts/s2i/crds
 
@@ -223,11 +249,28 @@
     rm -rf $charts_folder/ks-devops/charts/s2i/templates/python.yaml
     rm -rf $charts_folder/ks-devops/charts/s2i/templates/tomcat.yaml
 
-    {{ bin_dir }}/helm upgrade --install devops $ks_devops_chart \
-    -n kubesphere-devops-system \
-    -f {{ kubesphere_dir }}/ks-devops/ks-devops-values.yaml --wait
+    # S2i webhooks are down when the operator image cannot be pulled; helm still
+    # patches S2iBuilderTemplates from the previous release. Drop webhooks for
+    # the upgrade, and install the extracted chart (not the original tgz) so
+    # the removed templates stay out of the release.
+    {{ bin_dir }}/kubectl delete validatingwebhookconfiguration validating-webhook-configuration --ignore-not-found
+    {{ bin_dir }}/kubectl delete mutatingwebhookconfiguration mutating-webhook-configuration --ignore-not-found
 
-    {{ bin_dir }}/kubectl apply -f s2i-templates/templates.yaml
+    {{ bin_dir }}/helm upgrade --install devops $charts_folder/ks-devops \
+    -n kubesphere-devops-system \
+    -f {{ kubesphere_dir }}/ks-devops/ks-devops-values.yaml --timeout 15m
+
+    # Helm 3-way merge can leave the chart default CASC directory env first;
+    # the container then loads both yaml files. Force the single-file path
+    # before waiting for Ready.
+    {{ bin_dir }}/kubectl -n kubesphere-devops-system set env deploy/devops-jenkins \
+      CASC_JENKINS_CONFIG=/var/jenkins_home/casc_configs/jenkins.yaml
+    {{ bin_dir }}/kubectl -n kubesphere-devops-system rollout status deploy/devops-jenkins --timeout=15m
+    {{ bin_dir }}/kubectl -n kubesphere-devops-system rollout status deploy/devops-apiserver --timeout=5m
+    {{ bin_dir }}/kubectl -n kubesphere-devops-system rollout status deploy/devops-controller --timeout=5m
+    {{ bin_dir }}/kubectl -n kubesphere-devops-system rollout status statefulset/s2ioperator --timeout=5m
+
+    {{ bin_dir }}/kubectl apply --validate=false -f s2i-templates/templates.yaml
   register: devops_upgrade_result
   until: devops_upgrade_result is succeeded
   retries: 3

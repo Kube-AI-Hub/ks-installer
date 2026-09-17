@@ -34,8 +34,49 @@
   shell: >
     {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/minio-legacy-reader.yaml &&
     {{ bin_dir }}/kubectl wait --for=condition=ready pod/minio-legacy-reader
-    -n kubesphere-system --timeout=600s
+    -n kubesphere-system --timeout=120s
   register: minio_legacy_reader
+  failed_when: false
+
+- name: KubeAIHub | Collecting legacy MinIO reader logs
+  shell: >
+    {{ bin_dir }}/kubectl logs pod/minio-legacy-reader -n kubesphere-system --tail=80
+  register: minio_legacy_reader_logs
+  failed_when: false
+  changed_when: false
+
+- name: KubeAIHub | Detect already-XL MinIO volume
+  set_fact:
+    minio_volume_already_xl: >-
+      {{
+        'found: xl-single' in (minio_legacy_reader_logs.stdout | default('')) or
+        'found: xl' in (minio_legacy_reader_logs.stdout | default(''))
+      }}
+
+- name: KubeAIHub | Skip FS migration when volume is already XL
+  set_fact:
+    minio_legacy_migration: false
+  when: minio_volume_already_xl | bool
+
+- name: KubeAIHub | Drop leftover 2019 reader so XL MinIO can bind its PVC
+  shell: >
+    {{ bin_dir }}/kubectl delete pod minio-legacy-reader
+    -n kubesphere-system --ignore-not-found &&
+    {{ bin_dir }}/kubectl delete svc minio-legacy-reader
+    -n kubesphere-system --ignore-not-found &&
+    {{ bin_dir }}/kubectl delete job minio-legacy-backup
+    -n kubesphere-system --ignore-not-found &&
+    {{ bin_dir }}/kubectl delete pvc minio-backup
+    -n kubesphere-system --ignore-not-found
+  failed_when: false
+  when: minio_volume_already_xl | bool
+
+- name: KubeAIHub | Restore MinIO replicas when volume is already XL
+  shell: >
+    {{ bin_dir }}/kubectl patch deployment minio
+    -n kubesphere-system --type merge
+    -p '{"spec":{"replicas":1}}'
+  when: minio_volume_already_xl | bool
 
 - name: KubeAIHub | Backing up MinIO data before legacy format migration
   shell: >
@@ -47,20 +88,24 @@
   register: minio_backup_job
   when:
     - minio_legacy_reader.rc == 0
+    - not (minio_volume_already_xl | default(false) | bool)
 
 - name: KubeAIHub | Mark legacy migration backup completed
   set_fact:
     minio_legacy_migration: true
   when:
     - minio_backup_job is defined
-    - minio_backup_job.rc == 0
+    - minio_backup_job.changed | default(false)
+    - minio_backup_job.rc | default(1) == 0
 
 - name: KubeAIHub | Abort when legacy migration backup failed
   fail:
     msg: >-
       MinIO legacy migration backup failed. Check logs with:
-      kubectl logs -n kubesphere-system job/minio-legacy-backup
+      kubectl logs -n kubesphere-system job/minio-legacy-backup;
+      kubectl logs -n kubesphere-system pod/minio-legacy-reader
   when:
+    - not (minio_volume_already_xl | default(false) | bool)
     - minio_legacy_migration is not defined or not minio_legacy_migration
 
 - name: KubeAIHub | Removing legacy MinIO reader

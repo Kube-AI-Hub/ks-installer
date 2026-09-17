@@ -40,7 +40,15 @@ spec:
             - /bin/sh
             - -ec
             - |
-              mc alias set src http://minio-legacy-reader.kubesphere-system.svc:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}"
+              ATTEMPTS=0
+              until mc alias set src http://minio-legacy-reader.kubesphere-system.svc:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}"; do
+                ATTEMPTS=$((ATTEMPTS + 1))
+                if [ "$ATTEMPTS" -gt 15 ]; then
+                  echo "legacy MinIO reader is not reachable"
+                  exit 1
+                fi
+                sleep 2
+              done
               mc ls src/
               mc mirror --preserve --overwrite src/ /backup/
               echo "Backup completed."
