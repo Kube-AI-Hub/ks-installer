@@ -120,6 +120,10 @@
     builder_registry: "{{ _devops_image_prefix }}"
     jenkins_repo: "{{ _devops_image_prefix }}/ks-jenkins"
     jnlp_slave_repo: "{{ _devops_image_prefix }}/jenkins/inbound-agent"
+    argocd_repo: "{{ _devops_image_prefix }}/argoproj/argocd"
+    argocd_applicationset_repo: "{{ _devops_image_prefix }}/argoproj/argocd-applicationset"
+    argocd_dex_repo: "{{ _devops_image_prefix }}/dexidp/dex"
+    argocd_redis_repo: "{{ _devops_image_prefix }}/redis"
   vars:
     _devops_image_prefix: "{{ devops_running_apiserver_image.stdout | trim | regex_replace(':[^:]+$', '') | regex_replace('/devops-apiserver$', '') }}"
   when:
