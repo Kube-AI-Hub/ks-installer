@@ -1,0 +1,124 @@
+# Hand-apply on air-gapped clusters (do not helm-upgrade a live CSGHub release).
+# KubeSphere Prometheus serviceMonitorSelector is empty — any ServiceMonitor is picked up.
+# Do not scrape EPP router-scheduler Services.
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: csghub-inference-engines
+  namespace: spaces
+  labels:
+    app.kubernetes.io/name: csghub-inference-engines
+    app.kubernetes.io/part-of: csghub
+spec:
+  namespaceSelector:
+    matchNames:
+      - spaces
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: llminferenceservice-workload
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 60s
+      scrapeTimeout: 30s
+      honorLabels: true
+---
+# Standard KServe InferenceService (non-LLMISVC). Runner's ClusterIP is labeled
+# kserve.io/component=workload and exposes engine /metrics on port http (8000).
+# The LLMISVC ServiceMonitor above does not match these Services, and
+# prometheus.io annotations are ignored by KubeSphere (ServiceMonitor-only).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: csghub-kserve-standard-engines
+  namespace: spaces
+  labels:
+    app.kubernetes.io/name: csghub-kserve-standard-engines
+    app.kubernetes.io/part-of: csghub
+spec:
+  namespaceSelector:
+    matchNames:
+      - spaces
+  selector:
+    matchLabels:
+      kserve.io/component: workload
+      opencsg.com/managed-by: csghub-runner
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 60s
+      scrapeTimeout: 30s
+      honorLabels: true
+---
+# Legacy Knative inference (SGLang / older vLLM) exposes HTTP counters on the
+# queue-proxy user-metrics port of the Private ServerlessService. Engine
+# /metrics is often 404 (no --enable-metrics), and Envoy gateway series are not
+# labeled with the CSGHub svc name, so analysis HTTP charts stay empty unless
+# this port is scraped.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: csghub-knative-queue
+  namespace: spaces
+  labels:
+    app.kubernetes.io/name: csghub-knative-queue
+    app.kubernetes.io/part-of: csghub
+spec:
+  namespaceSelector:
+    matchNames:
+      - spaces
+  selector:
+    matchLabels:
+      networking.internal.knative.dev/serviceType: Private
+  endpoints:
+    - port: http-usermetric
+      path: /metrics
+      interval: 60s
+      scrapeTimeout: 30s
+      honorLabels: true
+---
+# EG ClusterIP (csghub-llmisvc-gateway) only publishes listener :80.
+# This extra Service exposes the proxy metrics port already open on the pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: csghub-llmisvc-gateway-metrics
+  namespace: envoy-gateway-system
+  labels:
+    app.kubernetes.io/name: csghub-llmisvc-gateway-metrics
+    app.kubernetes.io/part-of: csghub
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: proxy
+    app.kubernetes.io/managed-by: envoy-gateway
+    gateway.envoyproxy.io/owning-gateway-name: csghub-llmisvc-gateway
+    gateway.envoyproxy.io/owning-gateway-namespace: kserve
+  ports:
+    - name: metrics
+      port: 19001
+      targetPort: 19001
+      protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: csghub-llmisvc-gateway
+  namespace: envoy-gateway-system
+  labels:
+    app.kubernetes.io/name: csghub-llmisvc-gateway
+    app.kubernetes.io/part-of: csghub
+spec:
+  namespaceSelector:
+    matchNames:
+      - envoy-gateway-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: csghub-llmisvc-gateway-metrics
+      app.kubernetes.io/part-of: csghub
+  endpoints:
+    - port: metrics
+      path: /stats/prometheus
+      interval: 30s
+      honorLabels: true

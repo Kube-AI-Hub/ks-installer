@@ -1,0 +1,23 @@
+# Analysis HTTP charts read csghub_rproxy_requests_total. KubeSphere Prometheus
+# ignores prometheus.io annotations and only honors ServiceMonitor.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: csghub-rproxy
+  namespace: csghub
+  labels:
+    app.kubernetes.io/name: csghub-rproxy
+    app.kubernetes.io/part-of: csghub
+spec:
+  namespaceSelector:
+    matchNames:
+      - csghub
+  selector:
+    matchLabels:
+      app.kubernetes.io/service: rproxy
+  endpoints:
+    - port: rproxy
+      path: /metrics
+      interval: 60s
+      scrapeTimeout: 30s
+      honorLabels: true

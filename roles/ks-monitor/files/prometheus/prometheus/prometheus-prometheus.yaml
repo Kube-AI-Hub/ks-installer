@@ -75,6 +75,8 @@ spec:
     runAsNonRoot: true
     runAsUser: 1000
   serviceAccountName: prometheus-k8s
+  # Empty selectors scrape every namespace. CSGHub analysis charts depend on
+  # ServiceMonitors for csghub-rproxy and KServe engines; do not narrow these.
   serviceMonitorNamespaceSelector: {}
   serviceMonitorSelector: {}
   version: 2.39.1

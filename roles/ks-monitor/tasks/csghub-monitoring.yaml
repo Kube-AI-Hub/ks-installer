@@ -1,0 +1,8 @@
+- name: Monitoring | Getting CSGHub ServiceMonitor files
+  copy:
+    src: csghub
+    dest: "{{ kubesphere_dir }}/"
+
+- name: Monitoring | Installing CSGHub analysis ServiceMonitors
+  shell: >
+    {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/csghub/ --force
