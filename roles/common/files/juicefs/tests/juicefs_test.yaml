@@ -224,6 +224,30 @@ tests:
           path: metadata.name
           pattern: "csi-node$"
 
+  ## ------------------------------------------------------------------
+  ## RBAC
+  ## ------------------------------------------------------------------
+  - it: grants the node plugin the verbs it needs in the workload namespace
+    template: rbac.yaml
+    documentIndex: 5
+    asserts:
+      - isKind:
+          of: ClusterRole
+      - equal:
+          path: metadata.name
+          value: juicefs-csi-node
+      # The driver creates a per-volume Secret for the mount pod, patches the
+      # workload pod, and writes a ConfigMap for the mount configuration.
+      - contains:
+          path: rules[?(@.resources[0]=="secrets")].verbs
+          content: create
+      - contains:
+          path: rules[?(@.resources[0]=="pods")].verbs
+          content: patch
+      - contains:
+          path: rules[?(@.resources[0]=="configmaps")].verbs
+          content: create
+
   - it: registers the plugin with kubelet through the standard plugin registry
     template: node-daemonset.yaml
     asserts:

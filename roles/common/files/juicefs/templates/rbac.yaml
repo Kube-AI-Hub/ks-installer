@@ -6,6 +6,12 @@ CSIDriver and RBAC.
 attachRequired is false: the mount is a network filesystem, so there is nothing
 to attach to a node and running an attach/detach controller would only add a
 step that can fail.
+
+The verbs here are what the driver actually calls, not a minimal sketch. It
+creates a per-volume Secret for each mount pod, patches the workload pod to
+annotate the mount, and writes ConfigMaps for the mount pod configuration. A
+missing verb shows up as a 403 in the node plugin log and a PVC that never
+leaves ContainerCreating, which reads like a storage fault.
 */ -}}
 apiVersion: storage.k8s.io/v1
 kind: CSIDriver
@@ -47,31 +53,26 @@ rules:
     resources: ["persistentvolumes"]
     verbs: ["get", "list", "watch", "create", "delete", "patch"]
   - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
+    resources: ["persistentvolumeclaims", "persistentvolumeclaims/status"]
     verbs: ["get", "list", "watch", "update", "patch"]
-  - apiGroups: [""]
-    resources: ["persistentvolumeclaims/status"]
-    verbs: ["patch"]
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["list", "watch", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["nodes"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
-    resources: ["pods"]
-    # patch matters: the driver annotates the workload pod when a volume is
-    # mounted, and without it every NodePublishVolume fails with a 403.
-    verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
   - apiGroups: [""]
-    resources: ["pods/exec"]
-    verbs: ["create"]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "list"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["configmaps"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]
@@ -84,6 +85,12 @@ rules:
   - apiGroups: ["storage.k8s.io"]
     resources: ["csistoragecapacities"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets"]
+    verbs: ["get", "list"]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -114,8 +121,17 @@ rules:
     resources: ["nodes"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "list"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["persistentvolumes"]
     verbs: ["get", "list", "watch", "update", "patch"]
@@ -123,16 +139,14 @@ rules:
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["list", "watch", "create", "update", "patch"]
-  - apiGroups: [""]
-    resources: ["pods"]
-    # patch matters: the driver annotates the workload pod when a volume is
-    # mounted, and without it every NodePublishVolume fails with a 403.
-    verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
+    resources: ["endpoints"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
   - apiGroups: ["storage.k8s.io"]
-    resources: ["storageclasses"]
+    resources: ["storageclasses", "csinodes"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
