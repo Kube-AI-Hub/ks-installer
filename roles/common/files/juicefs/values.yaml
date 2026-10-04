@@ -84,8 +84,16 @@ node:
   kubeletDir: /var/lib/kubelet
   ## Host paths the driver caches mount configuration in. They must be shared
   ## with the mount pods, so they are hostPath, not emptyDir.
-  cacheDir: /var/lib/juicefs
+  ##
+  ## These are passed to the driver as JUICEFS_MOUNT_PATH and JUICEFS_CONFIG_PATH,
+  ## and the driver overwrites its own defaults with them unconditionally. An
+  ## empty value therefore produces a mount pod whose jfs-dir volume has no path
+  ## and which the API server rejects, so they must always be set.
+  mountPath: /var/lib/juicefs/volume
+  configPath: /var/lib/juicefs/config
   updateConfDir: /etc/juicefs
+  ## kubelet's read-only API port, used by the driver to talk to kubelet.
+  kubeletPort: 10250
 
 ## The StorageClass every business PVC and the model cache use.
 storageClass:

@@ -217,6 +217,19 @@ tests:
           path: spec.template.spec.containers[0].volumeMounts[?(@.name=="kubelet-dir")].mountPath
           value: /var/lib/kubelet
 
+  - it: passes the mount and config paths the driver overwrites its defaults with
+    template: node-daemonset.yaml
+    asserts:
+      # nodeRun assigns these straight from the environment over its built-in
+      # defaults. Left unset, the mount pod is built with a jfs-dir volume that
+      # has no path and the API server rejects it.
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name=="JUICEFS_MOUNT_PATH")].value
+          value: /var/lib/juicefs/volume
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name=="JUICEFS_CONFIG_PATH")].value
+          value: /var/lib/juicefs/config
+
   - it: names the node plugin so the driver recognises its own role
     template: node-daemonset.yaml
     asserts:
