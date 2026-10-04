@@ -3,6 +3,12 @@ Copyright 2026 Kube AI Hub.
 
 CSI controller.
 
+The workload is named ...-csi-controller on purpose. The driver picks its role
+from the POD_NAME environment variable and only starts the controller when the
+pod name contains "csi-controller" (and the node when it contains "csi-node").
+A differently named pod starts, logs nothing and exits 0, which looks like a
+scheduling problem rather than a naming one.
+
 Provisioning is what the controller does: it creates a directory in the object
 store bucket for each PVC and returns a volume handle. The sidecars are standard
 SIG-Storage components; the juicefs-plugin process is the CSI implementation.
@@ -10,13 +16,13 @@ SIG-Storage components; the juicefs-plugin process is the CSI implementation.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "juicefs.fullname" . }}-controller
+  name: {{ include "juicefs.fullname" . }}-csi-controller
   namespace: {{ include "juicefs.namespace" . }}
   labels:
     {{- include "juicefs.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.controller.replicas }}
-  serviceName: {{ include "juicefs.fullname" . }}-controller
+  serviceName: {{ include "juicefs.fullname" . }}-csi-controller
   selector:
     matchLabels:
       {{- include "juicefs.selectorLabels" . | nindent 6 }}
@@ -34,7 +40,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "juicefs.fullname" . }}-controller
+      serviceAccountName: {{ include "juicefs.fullname" . }}-csi-controller
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- range . }}

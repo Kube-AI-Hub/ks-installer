@@ -23,7 +23,7 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ include "juicefs.fullname" . }}-controller
+  name: {{ include "juicefs.fullname" . }}-csi-controller
   namespace: {{ include "juicefs.namespace" . }}
   labels:
     {{- include "juicefs.labels" . | nindent 4 }}
@@ -31,7 +31,7 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ include "juicefs.fullname" . }}-node
+  name: {{ include "juicefs.fullname" . }}-csi-node
   namespace: {{ include "juicefs.namespace" . }}
   labels:
     {{- include "juicefs.labels" . | nindent 4 }}
@@ -39,7 +39,7 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "juicefs.fullname" . }}-controller
+  name: {{ include "juicefs.fullname" . }}-csi-controller
   labels:
     {{- include "juicefs.labels" . | nindent 4 }}
 rules:
@@ -89,22 +89,22 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "juicefs.fullname" . }}-controller
+  name: {{ include "juicefs.fullname" . }}-csi-controller
   labels:
     {{- include "juicefs.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "juicefs.fullname" . }}-controller
+  name: {{ include "juicefs.fullname" . }}-csi-controller
 subjects:
   - kind: ServiceAccount
-    name: {{ include "juicefs.fullname" . }}-controller
+    name: {{ include "juicefs.fullname" . }}-csi-controller
     namespace: {{ include "juicefs.namespace" . }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "juicefs.fullname" . }}-node
+  name: {{ include "juicefs.fullname" . }}-csi-node
   labels:
     {{- include "juicefs.labels" . | nindent 4 }}
 rules:
@@ -133,14 +133,14 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "juicefs.fullname" . }}-node
+  name: {{ include "juicefs.fullname" . }}-csi-node
   labels:
     {{- include "juicefs.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "juicefs.fullname" . }}-node
+  name: {{ include "juicefs.fullname" . }}-csi-node
 subjects:
   - kind: ServiceAccount
-    name: {{ include "juicefs.fullname" . }}-node
+    name: {{ include "juicefs.fullname" . }}-csi-node
     namespace: {{ include "juicefs.namespace" . }}

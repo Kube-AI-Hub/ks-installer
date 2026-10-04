@@ -57,7 +57,7 @@
     msg: >-
       The JuiceFS CSI driver did not become ready.
       Check: kubectl -n kubesphere-system get pods -l app.kubernetes.io/name=juicefs;
-      kubectl -n kubesphere-system logs statefulset/juicefs-controller.
+      kubectl -n kubesphere-system logs statefulset/juicefs-csi-controller.
   when:
     - juicefs_status is defined
     - juicefs_status.rc | default(1) != 0

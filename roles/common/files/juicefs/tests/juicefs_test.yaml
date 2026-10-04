@@ -161,6 +161,22 @@ tests:
           path: spec.template.spec.containers[1].name
           value: csi-provisioner
 
+  - it: names the controller so the driver recognises its own role
+    template: controller-statefulset.yaml
+    asserts:
+      # The driver reads POD_NAME and only starts the controller when the name
+      # contains "csi-controller"; anything else starts, logs nothing, exits 0.
+      - matchRegex:
+          path: metadata.name
+          pattern: "csi-controller$"
+
+  - it: sets POD_NAME from the pod metadata, which is what the role check reads
+    template: controller-statefulset.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name=="POD_NAME")].valueFrom.fieldRef.fieldPath
+          value: metadata.name
+
   - it: propagates mounts into the kubelet pod directory
     template: controller-statefulset.yaml
     asserts:
@@ -186,6 +202,13 @@ tests:
       - equal:
           path: spec.template.spec.containers[2].name
           value: liveness-probe
+
+  - it: names the node plugin so the driver recognises its own role
+    template: node-daemonset.yaml
+    asserts:
+      - matchRegex:
+          path: metadata.name
+          pattern: "csi-node$"
 
   - it: registers the plugin with kubelet through the standard plugin registry
     template: node-daemonset.yaml

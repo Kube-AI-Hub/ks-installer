@@ -3,6 +3,10 @@ Copyright 2026 Kube AI Hub.
 
 CSI node plugin.
 
+The workload is named ...-csi-node on purpose: the driver picks its role from the
+POD_NAME environment variable and only starts the node plugin when the pod name
+contains "csi-node". See the controller template for the full explanation.
+
 Runs on every node because a volume can be mounted anywhere: JuiceFS is a
 network filesystem, so any node can serve it. The privileged security context and
 the bidirectional mount propagation on the pod directory are what let the plugin
@@ -14,7 +18,7 @@ the plugin as much as the workloads do.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: {{ include "juicefs.fullname" . }}-node
+  name: {{ include "juicefs.fullname" . }}-csi-node
   namespace: {{ include "juicefs.namespace" . }}
   labels:
     {{- include "juicefs.labels" . | nindent 4 }}
@@ -40,7 +44,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "juicefs.fullname" . }}-node
+      serviceAccountName: {{ include "juicefs.fullname" . }}-csi-node
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- range . }}
