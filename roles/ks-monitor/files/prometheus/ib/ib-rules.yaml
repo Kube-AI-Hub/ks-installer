@@ -110,3 +110,5 @@ spec:
       expr: sum(node:ib_rx_errors:rate)
     - record: cluster:ib_retrans:sum
       expr: sum(node:ib_retrans:rate)
+    - record: cluster:ib_link_speed:sum
+      expr: sum(node:ib_link_speed:sum)

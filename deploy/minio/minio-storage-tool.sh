@@ -121,6 +121,7 @@ Options:
   --image-registry <prefix>    Registry prefix for the MinIO and job images, for
                                example dockerhub.kubekey.local/kube-ai-hub.
                                Defaults to no prefix.
+  --image-tag <tag>            MinIO server tag. Defaults to the chart's.
   --buckets <b1,b2,...>        Buckets to create (default jfs,pg-backup).
   --storage-nodes <n1,n2,...>  Pin MinIO to these nodes via nodeSelector.
   --storage-node-label <k>     Node label key for placement
@@ -168,6 +169,8 @@ Options:
   --image-registry <prefix>    Registry prefix for the job images, for example
                                dockerhub.kubekey.local/kube-ai-hub. Defaults to
                                no prefix.
+  --image-tag <tag>            MinIO tag to take the mc binary from. Defaults to
+                               the tag the chart ships.
   --no-remove                  Do not delete backup objects that no longer exist
                                in MinIO. By default the backup is an exact
                                mirror of the source.
@@ -213,6 +216,8 @@ Options:
   --image-registry <prefix>    Registry prefix for the job images, for example
                                dockerhub.kubekey.local/kube-ai-hub. Defaults to
                                no prefix.
+  --image-tag <tag>            MinIO tag to take the mc binary from. Defaults to
+                               the tag the chart ships.
   --remove                     Delete objects in MinIO that are missing from the
                                backup. Off by default: a restore never destroys
                                live data unless you ask for it.
@@ -240,6 +245,7 @@ install_minio() {
   local storage_class="local-static"
   local volume_size="5Ti"
   local image_registry=""
+  local image_tag=""
   local buckets="jfs,pg-backup"
   local storage_nodes=""
   local node_label="node-role.kubernetes.io/storage"
@@ -258,6 +264,7 @@ install_minio() {
       --storage-class)       storage_class="${2:-}"; shift 2 ;;
       --volume-size)         volume_size="${2:-}"; shift 2 ;;
       --image-registry)      image_registry="${2:-}"; shift 2 ;;
+      --image-tag)           image_tag="${2:-}"; shift 2 ;;
       --buckets)             buckets="${2:-}"; shift 2 ;;
       --storage-nodes)       storage_nodes="${2:-}"; shift 2 ;;
       --storage-node-label)  node_label="${2:-}"; shift 2 ;;
@@ -302,6 +309,8 @@ install_minio() {
     set_args+=(--set "image.registry=${image_registry}")
     set_args+=(--set "mcImage.registry=${image_registry}")
   fi
+  # Pin the server tag where the registry only carries a specific release.
+  [ -n "$image_tag" ] && set_args+=(--set "image.tag=${image_tag}")
 
   if [ -n "$storage_nodes" ]; then
     # --set-json rather than --set: a node label key contains dots, which --set
@@ -554,16 +563,29 @@ EOF
 
 # Read accesskey/secretkey out of a Secret so the caller can inline them into the
 # Job. Prints the two values on separate lines.
+#
+# Two key spellings are accepted: the chart's own accesskey/secretkey, and
+# MINIO_ROOT_USER/MINIO_ROOT_PASSWORD as used by the single-node MinIO this
+# replaces. Reading a legacy Secret avoids copying credentials by hand during a
+# migration.
 read_credentials() {
   local namespace="$1" secret="$2"
-  local access secretkey
-  access=$("$KUBECTL" -n "$namespace" get secret "$secret" \
-    -o jsonpath='{.data.accesskey}' 2>/dev/null | base64 -d || true)
-  secretkey=$("$KUBECTL" -n "$namespace" get secret "$secret" \
-    -o jsonpath='{.data.secretkey}' 2>/dev/null | base64 -d || true)
-  [ -n "$access" ] || die "cannot read accesskey from secret ${namespace}/${secret}"
-  [ -n "$secretkey" ] || die "cannot read secretkey from secret ${namespace}/${secret}"
-  printf '%s\n%s\n' "$access" "$secretkey"
+  local access="" secretkey=""
+
+  local key
+  for pair in "accesskey:secretkey" "MINIO_ROOT_USER:MINIO_ROOT_PASSWORD"; do
+    local k1="${pair%%:*}" k2="${pair##*:}"
+    access=$("$KUBECTL" -n "$namespace" get secret "$secret" \
+      -o jsonpath="{.data.${k1}}" 2>/dev/null | base64 -d || true)
+    secretkey=$("$KUBECTL" -n "$namespace" get secret "$secret" \
+      -o jsonpath="{.data.${k2}}" 2>/dev/null | base64 -d || true)
+    if [ -n "$access" ] && [ -n "$secretkey" ]; then
+      printf '%s\n%s\n' "$access" "$secretkey"
+      return 0
+    fi
+  done
+
+  die "secret ${namespace}/${secret} has neither accesskey/secretkey nor MINIO_ROOT_USER/MINIO_ROOT_PASSWORD"
 }
 
 # Parse the options shared by export and import. Values come back through
@@ -575,6 +597,7 @@ parse_mirror_options() {
   m_release="ks-minio"
   m_mount_path="/backup"
   m_registry=""
+  m_image_tag=""
   m_image=""
   m_source_image=""
   m_buckets=""
@@ -600,6 +623,7 @@ parse_mirror_options() {
       --exclude)            m_exclude="${2:-}"; shift 2 ;;
       --mount-path)         m_mount_path="${2:-}"; shift 2 ;;
       --image-registry)     m_registry="${2:-}"; shift 2 ;;
+      --image-tag)          m_image_tag="${2:-}"; shift 2 ;;
       --timeout)            m_timeout="${2:-}"; shift 2 ;;
       --no-wait)            m_wait="false"; shift ;;
       --dry-run)            m_dry_run="true"; shift ;;
@@ -673,6 +697,10 @@ parse_mirror_options() {
   [ -n "$minio_tag" ] || minio_tag="latest"
   [ -n "$tools_repo" ] || tools_repo="busybox"
   [ -n "$tools_tag" ] || tools_tag="1.37.0"
+
+  # An explicit tag wins over the chart default, which matters where the
+  # registry only carries one specific MinIO release.
+  [ -n "$m_image_tag" ] && minio_tag="$m_image_tag"
 
   local prefix=""
   [ -n "$m_registry" ] && prefix="$(printf '%s' "$m_registry" | sed 's:/*$::')/"
