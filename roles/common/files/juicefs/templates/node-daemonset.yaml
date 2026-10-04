@@ -89,16 +89,24 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
-            - name: cache-dir
-              mountPath: /var/lib/juicefs/volume
+            # kubelet-dir must be the kubelet ROOT directory and must be named
+            # exactly that: the driver looks up the volume by name to learn which
+            # kubelet root directory the container has mounted, and compares it
+            # with the /pods/<uid> path NodePublishVolume is asked to mount. A
+            # differently named volume leaves the driver on its /var/lib/kubelet
+            # default, and every mount then fails with a root-dir mismatch.
+            - name: kubelet-dir
+              mountPath: {{ .Values.node.kubeletDir }}
+              mountPropagation: Bidirectional
+            - name: jfs-dir
+              mountPath: /jfs
               mountPropagation: Bidirectional
             - name: config-dir
               mountPath: /var/lib/juicefs/config
+            - name: device-dir
+              mountPath: /dev
             - name: update-conf-dir
               mountPath: /etc/juicefs
-            - name: mountpoint-dir
-              mountPath: {{ .Values.node.kubeletDir }}/pods
-              mountPropagation: Bidirectional
         - name: node-driver-registrar
           image: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.sidecars.nodeDriverRegistrar) }}
           imagePullPolicy: IfNotPresent
@@ -142,7 +150,13 @@ spec:
           hostPath:
             path: {{ .Values.node.kubeletDir }}/plugins_registry
             type: Directory
-        - name: cache-dir
+        # The whole kubelet root, not just pods: the driver reads this volume's
+        # hostPath to decide where kubelet keeps its state.
+        - name: kubelet-dir
+          hostPath:
+            path: {{ .Values.node.kubeletDir }}
+            type: Directory
+        - name: jfs-dir
           hostPath:
             path: {{ .Values.node.cacheDir }}/volume
             type: DirectoryOrCreate
@@ -150,13 +164,13 @@ spec:
           hostPath:
             path: {{ .Values.node.cacheDir }}/config
             type: DirectoryOrCreate
+        - name: device-dir
+          hostPath:
+            path: /dev
+            type: Directory
         - name: update-conf-dir
           hostPath:
             path: {{ .Values.node.updateConfDir }}
-            type: DirectoryOrCreate
-        - name: mountpoint-dir
-          hostPath:
-            path: {{ .Values.node.kubeletDir }}/pods
             type: DirectoryOrCreate
       {{- with .Values.tolerations }}
       tolerations:

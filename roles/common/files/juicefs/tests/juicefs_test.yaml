@@ -203,6 +203,20 @@ tests:
           path: spec.template.spec.containers[2].name
           value: liveness-probe
 
+  - it: exposes the kubelet root under the volume name the driver looks for
+    template: node-daemonset.yaml
+    asserts:
+      # The driver reads this volume's hostPath to learn which kubelet root the
+      # container mounted, and compares it with the path NodePublishVolume is
+      # asked for. Renaming the volume or changing the hostPath makes every
+      # mount fail with a root-dir mismatch.
+      - equal:
+          path: spec.template.spec.volumes[?(@.name=="kubelet-dir")].hostPath.path
+          value: /var/lib/kubelet
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts[?(@.name=="kubelet-dir")].mountPath
+          value: /var/lib/kubelet
+
   - it: names the node plugin so the driver recognises its own role
     template: node-daemonset.yaml
     asserts:
