@@ -114,8 +114,13 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
+            # The registrar creates its own registration socket in /registration
+            # by default, and that directory has to be kubelet's plugins_registry
+            # for the kubelet to notice the plugin. Mounting the host directory
+            # anywhere else makes the registrar fail to bind, which surfaces as
+            # "bind: no such file or directory" and the plugin never registers.
             - name: registration-dir
-              mountPath: {{ .Values.node.kubeletDir }}/plugins_registry
+              mountPath: /registration
         - name: liveness-probe
           image: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.sidecars.livenessProbe) }}
           imagePullPolicy: IfNotPresent

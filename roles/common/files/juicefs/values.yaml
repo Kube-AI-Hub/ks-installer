@@ -78,7 +78,9 @@ node:
       memory: 1Gi
       cpu: "1"
   ## Where kubelet keeps its plugin registry and pod directories. Only change
-  ## these when kubelet itself was moved off the default paths.
+  ## this when kubelet itself was moved off the default paths: read the real
+  ## value from `--root-dir` in the kubelet's arguments, and prefer the resolved
+  ## path over a symlink such as /var/lib/kubelet.
   kubeletDir: /var/lib/kubelet
   ## Host paths the driver caches mount configuration in. They must be shared
   ## with the mount pods, so they are hostPath, not emptyDir.

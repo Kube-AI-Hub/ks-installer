@@ -219,3 +219,11 @@ tests:
       - equal:
           path: spec.template.spec.containers[1].env[1].value
           value: /var/lib/kubelet/plugins/csi.juicefs.com/csi.sock
+      # The registrar binds its own socket in /registration, so the host's
+      # plugins_registry has to be mounted exactly there.
+      - equal:
+          path: spec.template.spec.containers[1].volumeMounts[1].mountPath
+          value: /registration
+      - equal:
+          path: spec.template.spec.volumes[1].hostPath.path
+          value: /var/lib/kubelet/plugins_registry
