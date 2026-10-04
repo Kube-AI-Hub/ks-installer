@@ -14,10 +14,40 @@
     - (common.openldap is defined and common.openldap.enabled is defined and common.openldap.enabled) or devops.enabled
     - "status.openldap is not defined or status.openldap.status is not defined or status.openldap.status != 'enabled'"
 
-- import_tasks: minio-install.yaml
+# Object storage is an external dependency now that the built-in MinIO is gone.
+# Assert it here, before anything tries to use it, so a missing endpoint is a
+# single clear message instead of the first component to need S3 failing deep in
+# its own startup.
+- name: KubeAIHub | Requiring the external object storage configuration
+  assert:
+    that:
+      - common.s3 is defined
+      - common.s3.endpoint | default('') | length > 0
+      - common.s3.accessKeyID | default('') | length > 0
+      - common.s3.secretAccessKey | default('') | length > 0
+    fail_msg: >-
+      common.s3.{endpoint,accessKeyID,secretAccessKey} are required. The built-in
+      MinIO was removed, so object storage must be provided externally: install it
+      with ks-installer/deploy/minio/minio-storage-tool.sh, then set common.s3 in
+      cluster-configuration.yaml to that cluster's endpoint and credentials.
+    quiet: true
   when:
-    - (devops.enabled or (openpitrix.store is defined and openpitrix.store.enabled is defined and openpitrix.store.enabled)) and common.s3 is not defined
-    - "status.minio is not defined or status.minio.status is not defined or status.minio.status != 'enabled'"
+    - (common.juicefs | default({})).enabled | default(true)
+      or devops.enabled
+      or (openpitrix.store is defined and openpitrix.store.enabled is defined and openpitrix.store.enabled)
+
+# The metadata database runs before the driver: the driver's Secret carries the
+# connection string, and a driver pointed at a database that does not exist yet
+# fails at the first PVC rather than at install time.
+- import_tasks: juicefs-metadb-install.yaml
+  when:
+    - (common.juicefs | default({})).enabled | default(true)
+    - "status.juicefsMetadb is not defined or status.juicefsMetadb.status is not defined or status.juicefsMetadb.status != 'enabled'"
+
+- import_tasks: juicefs-install.yaml
+  when:
+    - (common.juicefs | default({})).enabled | default(true)
+    - "status.juicefs is not defined or status.juicefs.status is not defined or status.juicefs.status != 'enabled'"
 
 - import_tasks: escurator-install.yaml
   when:

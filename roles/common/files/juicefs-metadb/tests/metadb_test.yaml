@@ -1,0 +1,214 @@
+# Copyright 2026 Kube AI Hub.
+#
+# Render tests for the JuiceFS metadata database chart. Two things matter beyond
+# the ordinary StatefulSet checks: the volume must not land on JuiceFS, and the
+# backup CronJob must not silently run without a destination.
+suite: Test JuiceFS metadata database chart
+templates:
+  - secret.yaml
+  - configmap.yaml
+  - service.yaml
+  - statefulset.yaml
+  - pdb.yaml
+  - backup-cronjob.yaml
+release:
+  name: juicefs-metadb
+  namespace: kubesphere-system
+set:
+  auth.password: "generated-password"
+  backup.enabled: false
+tests:
+  ## ------------------------------------------------------------------
+  ## Credentials
+  ## ------------------------------------------------------------------
+  - it: stores the superuser credentials under the keys the postgres image reads
+    template: secret.yaml
+    asserts:
+      - equal:
+          path: stringData.POSTGRES_USER
+          value: juicefs
+      - equal:
+          path: stringData.POSTGRES_PASSWORD
+          value: generated-password
+      - equal:
+          path: stringData.POSTGRES_MULTIPLE_DATABASES
+          value: juicefs_meta
+      - equal:
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+
+  - it: requires an explicit password because the CSI Secret shares it
+    template: secret.yaml
+    set:
+      auth.password: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: "auth.password must be set: the JuiceFS CSI driver Secret needs the same value. Generate one and pass it to both juicefs-metadb and juicefs."
+
+  ## ------------------------------------------------------------------
+  ## Storage
+  ## ------------------------------------------------------------------
+  - it: puts the data on the static provisioner, never on JuiceFS
+    template: statefulset.yaml
+    asserts:
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.storageClassName
+          value: local-static
+      - lengthEqual:
+          path: spec.volumeClaimTemplates
+          count: 1
+
+  - it: refuses a JuiceFS storage class
+    template: statefulset.yaml
+    set:
+      persistence.storageClass: juicefs-shared
+    asserts:
+      - failedTemplate:
+          errorMessage: "persistence.storageClass \"juicefs-shared\" is a JuiceFS class: the metadata database cannot live on the storage it describes. Use local-static or another independent class."
+
+  ## ------------------------------------------------------------------
+  ## Server
+  ## ------------------------------------------------------------------
+  - it: creates only the requested database and raises the connection ceiling
+    template: configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["runtime.conf"]
+          pattern: "max_connections = '500'"
+
+  - it: runs a single primary by default
+    template: statefulset.yaml
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.podManagementPolicy
+          value: Parallel
+
+  - it: clears a lost+found directory before postgres initialises
+    template: statefulset.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: clear-lost-found
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].command[2]
+          pattern: "lost\\+found"
+
+  - it: spreads replicas across nodes once there is more than one
+    template: statefulset.yaml
+    set:
+      replicas: 3
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey
+          value: kubernetes.io/hostname
+
+  - it: skips the disruption budget for a single primary
+    template: pdb.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: protects the majority once there are several replicas
+    template: pdb.yaml
+    set:
+      replicas: 3
+      podDisruptionBudget.enabled: true
+    asserts:
+      - equal:
+          path: spec.minAvailable
+          value: 2
+
+  ## ------------------------------------------------------------------
+  ## Services
+  ## ------------------------------------------------------------------
+  - it: renders a headless service for the StatefulSet
+    template: service.yaml
+    documentSelector:
+      path: metadata.name
+      value: juicefs-metadb-headless
+    asserts:
+      - equal:
+          path: kind
+          value: Service
+      - equal:
+          path: spec.clusterIP
+          value: None
+
+  - it: exposes the database on the configured port
+    template: service.yaml
+    documentSelector:
+      path: metadata.name
+      value: juicefs-metadb
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports[0].port
+          value: 5432
+      - equal:
+          path: spec.ports[0].name
+          value: postgres
+
+  ## ------------------------------------------------------------------
+  ## Backup
+  ## ------------------------------------------------------------------
+  - it: renders no backup resources when backups are disabled
+    template: backup-cronjob.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: refuses to enable backups without a destination
+    template: backup-cronjob.yaml
+    set:
+      backup.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "backup.s3.{endpoint,accessKey,secretKey} are required when backup.enabled is true (or set backup.s3.existingSecret). There is no built-in object store to fall back on."
+
+  - it: dumps before uploading by running pg_dump as an init container
+    template: backup-cronjob.yaml
+    documentSelector:
+      path: kind
+      value: CronJob
+    set:
+      backup.enabled: true
+      backup.s3.endpoint: "http://ks-minio.kubesphere-system.svc:9000"
+      backup.s3.accessKey: "ak"
+      backup.s3.secretKey: "sk"
+    asserts:
+      - equal:
+          path: kind
+          value: CronJob
+      - equal:
+          path: spec.schedule
+          value: "0 3 * * *"
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.initContainers[0].name
+          value: pg-dump
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].name
+          value: upload
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env[0].value
+          value: "pg-backup"
+
+  - it: prunes old runs by keeping a configurable number of them
+    template: backup-cronjob.yaml
+    documentSelector:
+      path: kind
+      value: CronJob
+    set:
+      backup.enabled: true
+      backup.keep: 7
+      backup.s3.endpoint: "http://ks-minio.kubesphere-system.svc:9000"
+      backup.s3.accessKey: "ak"
+      backup.s3.secretKey: "sk"
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env[2].value
+          value: "7"

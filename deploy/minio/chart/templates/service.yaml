@@ -1,0 +1,63 @@
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+Two Services:
+  - headless: stable per-server DNS names, used to build the drive list.
+  - client: the address applications connect to.
+Distributed MinIO requires the headless Service to exist before the servers can
+form a cluster, so it is always rendered.
+*/ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "minio.headlessName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "minio.name" . }}
+    chart: {{ include "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: service
+      port: {{ .Values.service.port }}
+      protocol: TCP
+  selector:
+    app: {{ include "minio.name" . }}
+    release: {{ .Release.Name }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "minio.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "minio.name" . }}
+    chart: {{ include "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ default "ClusterIP" .Values.service.type }}
+  ports:
+    - name: service
+      port: {{ .Values.service.port }}
+      protocol: TCP
+      targetPort: 9000
+      {{- if and (eq .Values.service.type "NodePort") .Values.service.nodePort }}
+      nodePort: {{ .Values.service.nodePort }}
+      {{- end }}
+    {{- if .Values.console.enabled }}
+    - name: console
+      port: {{ .Values.console.service.port }}
+      protocol: TCP
+      targetPort: 9001
+    {{- end }}
+  selector:
+    app: {{ include "minio.name" . }}
+    release: {{ .Release.Name }}

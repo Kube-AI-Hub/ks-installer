@@ -1,0 +1,123 @@
+# Copyright 2026 Kube AI Hub.
+#
+# JuiceFS CSI driver.
+#
+# Data blocks go to MinIO; the directory tree, file attributes and chunk map go
+# to the independent PostgreSQL metadata database (see the juicefs-metadb chart).
+# Nothing here depends on the volumes it serves, which is what lets a JuiceFS
+# volume survive losing a node or a MinIO server.
+#
+# The driver provides one StorageClass, `juicefs-shared`. Its name contains
+# "shared" on purpose: csghub-server picks ReadWriteMany for a StorageClass whose
+# name matches `shared` and ReadWriteOnce for one matching `local`, so the access
+# mode follows from the name without any application change.
+
+## Driver namespace. The CSI Secret and StorageClass reference it explicitly, so
+## the two must agree.
+namespaceOverride: ""
+
+image:
+  repository: juicedata/juicefs-csi-driver
+  tag: "v0.27.0"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+## Sidecar images. These are standard SIG-Storage images; mirror them alongside
+## the driver on an air-gapped site.
+sidecars:
+  provisioner:
+    repository: registry.k8s.io/sig-storage/csi-provisioner
+    tag: "v5.1.0"
+  resizer:
+    repository: registry.k8s.io/sig-storage/csi-resizer
+    tag: "v1.12.0"
+  livenessProbe:
+    repository: registry.k8s.io/sig-storage/livenessprobe
+    tag: "v2.14.0"
+  nodeDriverRegistrar:
+    repository: registry.k8s.io/sig-storage/csi-node-driver-registrar
+    tag: "v2.12.0"
+
+## Image used for the per-volume mount pods. It only has to contain the juicefs
+## client, not the CSI plugin.
+mountImage:
+  repository: juicedata/mount
+  tag: "ce-v1.2.0"
+  pullPolicy: IfNotPresent
+
+## The controller only coordinates provisioning and resizing; one replica is
+## correct and the leader-election sidecars make a second one safe.
+controller:
+  replicas: 1
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 1Gi
+      cpu: "1"
+
+node:
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 1Gi
+      cpu: "1"
+  ## Where kubelet keeps its plugin registry and pod directories. Only change
+  ## these when kubelet itself was moved off the default paths.
+  kubeletDir: /var/lib/kubelet
+  ## Host paths the driver caches mount configuration in. They must be shared
+  ## with the mount pods, so they are hostPath, not emptyDir.
+  cacheDir: /var/lib/juicefs
+  updateConfDir: /etc/juicefs
+
+## The StorageClass every business PVC and the model cache use.
+storageClass:
+  ## Must contain "shared" so csghub-server selects ReadWriteMany.
+  name: juicefs-shared
+  reclaimPolicy: Retain
+  volumeBindingMode: Immediate
+  ## JuiceFS volumes grow in the object store, so online expansion is real.
+  allowVolumeExpansion: true
+  annotations: {}
+
+## The volume credentials. Every dynamically provisioned volume is a directory
+## in `bucket`, distinguished by the PVC name.
+volume:
+  ## JuiceFS filesystem name. Identifies the volume in `juicefs status` output.
+  name: kubeaihub
+  ## Object store the data blocks are written to.
+  storage: s3
+  bucket: ""
+  ## Set when the endpoint speaks HTTPS. MinIO inside the cluster usually does not.
+  secure: false
+  ## Credentials for the object store.
+  accessKey: ""
+  secretKey: ""
+  ## Metadata database connection string, for example
+  ## postgres://juicefs:<password>@juicefs-metadb.kubesphere-system.svc:5432/juicefs_meta
+  metaurl: ""
+  ## Any other juicefs volume settings, passed through verbatim.
+  extra: {}
+
+## Driver behaviour, passed to every juicefs-plugin container. The defaults match
+## upstream and only need changing when debugging.
+driverOptions:
+  logLevel: 5
+  ## Run each mount in its own pod instead of a process inside the CSI pod. This
+  ## is what upstream recommends and what makes a stuck mount debuggable.
+  mountPod: true
+
+## Debilitate mount point. JuiceFS stores a per-pod mountpoint; on a node running
+## many workloads this can be raised without consequence.
+nodeExtraArgs: []
+
+podAnnotations: {}
+podLabels: {}
+
+## Node scheduling for the DaemonSet. The storage nodes carry a taint, but the
+## DaemonSet runs on every node so it must tolerate it.
+tolerations:
+  - operator: Exists

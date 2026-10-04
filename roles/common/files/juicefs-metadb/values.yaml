@@ -1,0 +1,113 @@
+# Copyright 2026 Kube AI Hub.
+#
+# JuiceFS metadata database.
+#
+# This is deliberately the least clever component in the storage foundation. The
+# database holds the directory tree, file attributes and chunk map for every
+# JuiceFS volume, so losing it loses the volumes even though the data blocks are
+# still in MinIO. It therefore:
+#
+#   - stores its own data on a local PV, never on JuiceFS (that would be circular:
+#     the volume needed to read the metadata would need the metadata);
+#   - backs itself up with pg_dump to an object store bucket, so a lost disk is a
+#     restore rather than a re-upload of every object;
+#   - exposes `replicas` and anti-affinity so the single primary can become a
+#     primary/standby pair once a third storage node exists.
+
+## Fullname override. The CSI driver's Secret points at the Service, so this name
+## is part of the storage foundation's contract; change it only together with
+## the driver's `metaurl`.
+fullnameOverride: juicefs-metadb
+
+image:
+  repository: opencsghq/postgres
+  tag: "15.19"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+## Superuser for the metadata database. The JuiceFS CSI driver uses these
+## credentials to open its own database (see the driver chart's `database`).
+auth:
+  username: juicefs
+  password: ""
+  existingSecret: ""
+
+## Databases created on first start.
+databases:
+  - juicefs_meta
+
+## Number of instances. Keep at 1 while there are only two storage nodes: two
+## replicas on two nodes is still a single failure domain, and the second replica
+## would add a standby that nothing promotes. Raise to 3 once a third node exists.
+replicas: 1
+
+## PostgreSQL runtime parameters. max_connections matters here: the CSI driver
+## opens one long-lived connection per mounted volume, so a node running many
+## mounts multiplies the connection count.
+parameters:
+  max_connections: 500
+  shared_buffers: "512MB"
+
+service:
+  port: 5432
+
+persistence:
+  enabled: true
+  ## Must not be a JuiceFS class. `local-static` is the static provisioner
+  ## created by deploy/minio; any class that does not resolve through JuiceFS
+  ## itself is acceptable.
+  storageClass: local-static
+  accessMode: ReadWriteOnce
+  size: 20Gi
+
+resources:
+  requests:
+    memory: 2Gi
+    cpu: "1"
+  limits:
+    memory: 8Gi
+    cpu: "4"
+
+## Deny accidental scheduling on the storage node that holds the only copy.
+## Reserved for the HA shape; harmless with a single replica.
+podAntiAffinity:
+  enabled: true
+  topologyKey: kubernetes.io/hostname
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: ""
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+## pg_dump schedule. A dump is cheap next to the object store it protects, so
+## this is on by default. Each run writes <bucket>/<date>/<database>.dump.
+backup:
+  enabled: true
+  schedule: "0 3 * * *"
+  ## Keep this many dated directories; older ones are pruned after each dump.
+  keep: 14
+  image:
+    repository: minio/mc
+    tag: RELEASE.2025-08-13T08-35-41Z
+    pullPolicy: IfNotPresent
+  ## Object store the dumps are written to. Required when enabled; there is no
+  ## default because there is no built-in object store any more.
+  s3:
+    endpoint: ""
+    accessKey: ""
+    secretKey: ""
+    bucket: pg-backup
+    secure: false
+    existingSecret: ""
+
+## Backup Job housekeeping. Only change these when a dump legitimately runs long.
+backupJob:
+  backoffLimit: 2
+  activeDeadlineSeconds: 7200
+  historyLimit: 3
+
+podAnnotations: {}
+podLabels: {}

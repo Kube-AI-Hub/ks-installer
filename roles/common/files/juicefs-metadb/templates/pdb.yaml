@@ -1,0 +1,24 @@
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+Pod disruption budget. Only useful once there is more than one replica; a single
+primary would just be blocked from draining by its own PDB.
+*/ -}}
+{{- if and .Values.podDisruptionBudget.enabled (gt (int .Values.replicas) 1) }}
+{{- $minAvailable := .Values.podDisruptionBudget.minAvailable }}
+{{- if not $minAvailable }}
+{{- $minAvailable = add (div (int .Values.replicas) 2) 1 }}
+{{- end }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "juicefs-metadb.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "juicefs-metadb.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ $minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "juicefs-metadb.selectorLabels" . | nindent 6 }}
+{{- end }}

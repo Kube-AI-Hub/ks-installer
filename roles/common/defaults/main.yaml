@@ -2,7 +2,6 @@
 
 common:
   mysqlVolumeSize: 20Gi
-  minioVolumeSize: 20Gi
   etcdVolumeSize: 20Gi
   openldapVolumeSize: 2Gi
   redisVolumSize: 2Gi
@@ -26,14 +25,6 @@ common:
     opensearchPrefix: whizard
     # externalOpensearchHost:
     # externalOpensearchPort:
-
-
-op_minio_accesskey: openpitrixminioaccesskey
-op_minio_secretkey: openpitrixminiosecretkey
-
-
-op_minio_svc: http://openpitrix-minio.openpitrix-system.svc:9000
-ks_minio_svc: http://minio.kubesphere-system.svc:9000
 
 
 ks_redis_svc: redis.kubesphere-system.svc

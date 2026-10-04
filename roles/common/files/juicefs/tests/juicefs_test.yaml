@@ -1,0 +1,198 @@
+# Copyright 2026 Kube AI Hub.
+#
+# Render tests for the JuiceFS CSI chart. The StorageClass name is load-bearing:
+# csghub-server reads "shared" out of it to pick ReadWriteMany, so it is asserted
+# explicitly rather than left to the default.
+suite: Test JuiceFS CSI chart
+templates:
+  - secret.yaml
+  - rbac.yaml
+  - controller-statefulset.yaml
+  - node-daemonset.yaml
+release:
+  name: juicefs
+  namespace: kubesphere-system
+set:
+  volume.metaurl: "postgres://juicefs:pw@juicefs-metadb.kubesphere-system.svc:5432/juicefs_meta"
+  volume.bucket: "http://ks-minio.kubesphere-system.svc:9000/jfs"
+  volume.accessKey: "ak"
+  volume.secretKey: "sk"
+tests:
+  ## ------------------------------------------------------------------
+  ## Volume credentials and StorageClass
+  ## ------------------------------------------------------------------
+  - it: renders the volume credentials in the keys juicefs expects
+    template: secret.yaml
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: metadata.name
+          value: juicefs-secret
+      - equal:
+          path: stringData.name
+          value: kubeaihub
+      - equal:
+          path: stringData.metaurl
+          value: "postgres://juicefs:pw@juicefs-metadb.kubesphere-system.svc:5432/juicefs_meta"
+      - equal:
+          path: stringData.storage
+          value: s3
+      - equal:
+          path: stringData.bucket
+          value: "http://ks-minio.kubesphere-system.svc:9000/jfs"
+      - equal:
+          path: stringData["access-key"]
+          value: ak
+      - equal:
+          path: stringData["secret-key"]
+          value: sk
+      - equal:
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+
+  - it: creates a shared StorageClass so csghub-server picks ReadWriteMany
+    template: secret.yaml
+    documentIndex: 1
+    asserts:
+      - equal:
+          path: kind
+          value: StorageClass
+      - matchRegex:
+          path: metadata.name
+          pattern: "shared"
+      - equal:
+          path: provisioner
+          value: csi.juicefs.com
+      - equal:
+          path: reclaimPolicy
+          value: Retain
+      - equal:
+          path: allowVolumeExpansion
+          value: true
+      - equal:
+          path: volumeBindingMode
+          value: Immediate
+
+  - it: points the StorageClass at the volume Secret for every operation
+    template: secret.yaml
+    documentIndex: 1
+    asserts:
+      - equal:
+          path: parameters["csi.storage.k8s.io/provisioner-secret-name"]
+          value: juicefs-secret
+      - equal:
+          path: parameters["csi.storage.k8s.io/provisioner-secret-namespace"]
+          value: kubesphere-system
+      - equal:
+          path: parameters["csi.storage.k8s.io/node-publish-secret-name"]
+          value: juicefs-secret
+      - equal:
+          path: parameters["csi.storage.k8s.io/controller-expand-secret-name"]
+          value: juicefs-secret
+
+  - it: names the StorageClass from values so a rename reaches the cluster
+    template: secret.yaml
+    documentIndex: 1
+    set:
+      storageClass.name: juicefs-shared-team
+    asserts:
+      - equal:
+          path: metadata.name
+          value: juicefs-shared-team
+
+  - it: refuses a StorageClass name that would not select ReadWriteMany
+    template: secret.yaml
+    set:
+      storageClass.name: local-static
+    asserts:
+      - failedTemplate:
+          errorMessage: "storageClass.name \"local-static\" must contain \"shared\": csghub-server picks ReadWriteMany for classes whose name matches 'shared' and ReadWriteOnce for those matching 'local'."
+
+  - it: refuses an empty metadata URL
+    template: secret.yaml
+    set:
+      volume.metaurl: ""
+    asserts:
+      - failedTemplate: {}
+
+  - it: refuses an empty bucket
+    template: secret.yaml
+    set:
+      volume.bucket: ""
+    asserts:
+      - failedTemplate: {}
+
+  ## ------------------------------------------------------------------
+  ## CSIDriver
+  ## ------------------------------------------------------------------
+  - it: registers an attachless driver that cannot be attached to one node
+    template: rbac.yaml
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: kind
+          value: CSIDriver
+      - equal:
+          path: metadata.name
+          value: csi.juicefs.com
+      - equal:
+          path: spec.attachRequired
+          value: false
+      - equal:
+          path: spec.podInfoOnMount
+          value: true
+
+  ## ------------------------------------------------------------------
+  ## Controller and node plugins
+  ## ------------------------------------------------------------------
+  - it: runs a single leader-elected controller
+    template: controller-statefulset.yaml
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 1
+      - lengthEqual:
+          path: spec.template.spec.containers
+          count: 4
+      - equal:
+          path: spec.template.spec.containers[0].name
+          value: juicefs-plugin
+      - equal:
+          path: spec.template.spec.containers[1].name
+          value: csi-provisioner
+
+  - it: propagates mounts into the kubelet pod directory
+    template: controller-statefulset.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts[4].mountPropagation
+          value: Bidirectional
+
+  - it: runs a node plugin on every node, including the tainted storage nodes
+    template: node-daemonset.yaml
+    asserts:
+      - equal:
+          path: kind
+          value: DaemonSet
+      - equal:
+          path: spec.template.spec.containers[0].name
+          value: juicefs-plugin
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.privileged
+          value: true
+      - equal:
+          path: spec.template.spec.tolerations[0].operator
+          value: Exists
+      - equal:
+          path: spec.template.spec.containers[2].name
+          value: liveness-probe
+
+  - it: registers the plugin with kubelet through the standard plugin registry
+    template: node-daemonset.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[1].name
+          value: node-driver-registrar
+      - equal:
+          path: spec.template.spec.containers[1].env[1].value
+          value: /var/lib/kubelet/plugins/csi.juicefs.com/csi.sock

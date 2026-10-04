@@ -1,0 +1,62 @@
+# Copyright 2026 Kube AI Hub.
+#
+# Example values for the standalone MinIO chart. Copy and adapt rather than
+# passing a long --set list: the installer needs the same file anyway when it
+# re-applies the chart.
+#
+# This file documents the two supported shapes. Pick one and delete the other.
+
+## ---------------------------------------------------------------------------
+## Shape 1: distributed, 4 servers x 2 drives = 8 drives.
+##
+## This is the shape to run in production. Each drive is a separate local PV, and
+## podAntiAffinity keeps one server per node so no single node holds two drives
+## of the same erasure set.
+## ---------------------------------------------------------------------------
+mode: distributed
+replicas: 4
+volumesPerServer: 2
+
+## The StorageClass the drives bind to. Must be the static provisioner so the
+## drive-to-node mapping is fixed; see ../minio-storage-tool.sh prepare.
+persistence:
+  enabled: true
+  storageClass: local-static
+  accessMode: ReadWriteOnce
+  size: 5Ti
+
+## Pin to the storage nodes and tolerate their taint, so MinIO only ever runs
+## where the local PVs are.
+nodeSelector:
+  node-role.kubernetes.io/storage: "true"
+tolerations:
+  - key: storage
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+
+## A strict majority of the servers, so a node drain cannot take out quorum.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: ""
+
+## Buckets created after install. "jfs" holds the JuiceFS data blocks, and
+## "pg-backup" holds pg_dump output for the JuiceFS metadata database.
+buckets:
+  - name: jfs
+    policy: none
+  - name: pg-backup
+    policy: none
+
+## ---------------------------------------------------------------------------
+## Shape 2: single node, single drive.
+##
+## Only for a throwaway or a first bring-up test. There is no redundancy here:
+## one disk failure loses the data.
+## ---------------------------------------------------------------------------
+# mode: standalone
+# replicas: 1
+# volumesPerServer: 1
+# persistence:
+#   storageClass: local-static
+#   size: 5Ti

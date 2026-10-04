@@ -1,0 +1,34 @@
+Copyright 2026 Kube AI Hub.
+
+The JuiceFS metadata database is installed as:
+
+  service:  {{ include "juicefs-metadb.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
+  database: {{ first .Values.databases }}
+  user:     {{ .Values.auth.username }}
+  replicas: {{ .Values.replicas }}
+
+The JuiceFS CSI driver needs a Secret whose `metaurl` points at this Service:
+
+  metaurl: postgres://{{ .Values.auth.username }}:<password>@{{ include "juicefs-metadb.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/{{ first .Values.databases }}
+
+Read the generated password with:
+
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "juicefs-metadb.secretName" . }} \
+    -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d
+
+Do not point this database's volume at a JuiceFS StorageClass, and do not move
+its data onto a JuiceFS volume later: the metadata would then depend on the
+storage it describes.
+
+{{- if .Values.backup.enabled }}
+
+Nightly dumps go to s3://{{ .Values.backup.s3.bucket }}/ ({{ .Values.backup.schedule }}),
+keeping the newest {{ .Values.backup.keep }} runs. Restore with:
+
+  mc cp backup/{{ .Values.backup.s3.bucket }}/LATEST /tmp/LATEST
+  mc cp --recursive backup/{{ .Values.backup.s3.bucket }}/$(cat /tmp/LATEST)/ /restore/
+{{- else }}
+
+Backups are DISABLED. The metadata volume is local storage: without a dump, a
+disk failure means losing every JuiceFS volume.
+{{- end }}

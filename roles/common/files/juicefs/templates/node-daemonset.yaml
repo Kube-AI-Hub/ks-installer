@@ -1,0 +1,155 @@
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+CSI node plugin.
+
+Runs on every node because a volume can be mounted anywhere: JuiceFS is a
+network filesystem, so any node can serve it. The privileged security context and
+the bidirectional mount propagation on the pod directory are what let the plugin
+bind a mount inside a pod's namespace on the host.
+
+The toleration is `Exists` rather than the storage taint: the storage nodes need
+the plugin as much as the workloads do.
+*/ -}}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "juicefs.fullname" . }}-node
+  namespace: {{ include "juicefs.namespace" . }}
+  labels:
+    {{- include "juicefs.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "juicefs.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/role: node
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 2
+  template:
+    metadata:
+      labels:
+        {{- include "juicefs.labels" . | nindent 8 }}
+        app.kubernetes.io/role: node
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "juicefs.fullname" . }}-node
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: juicefs-plugin
+          image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --endpoint=$(CSI_ENDPOINT)
+            - --logtostderr
+            - --nodeid=$(NODE_NAME)
+            - --v={{ .Values.driverOptions.logLevel }}
+            {{- range .Values.nodeExtraArgs }}
+            - {{ . }}
+            {{- end }}
+          env:
+            - name: CSI_ENDPOINT
+              value: unix://csi/csi.sock
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: JUICEFS_MOUNT_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: JUICEFS_MOUNT_IMAGE
+              value: {{ printf "%s:%s" .Values.mountImage.repository .Values.mountImage.tag | quote }}
+          securityContext:
+            privileged: true
+          resources:
+            {{- toYaml .Values.node.resources | nindent 12 }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: cache-dir
+              mountPath: /var/lib/juicefs/volume
+              mountPropagation: Bidirectional
+            - name: config-dir
+              mountPath: /var/lib/juicefs/config
+            - name: update-conf-dir
+              mountPath: /etc/juicefs
+            - name: mountpoint-dir
+              mountPath: {{ .Values.node.kubeletDir }}/pods
+              mountPropagation: Bidirectional
+        - name: node-driver-registrar
+          image: {{ printf "%s:%s" .Values.sidecars.nodeDriverRegistrar.repository .Values.sidecars.nodeDriverRegistrar.tag }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - --csi-address=$(ADDRESS)
+            - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
+            - --v=5
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+            - name: DRIVER_REG_SOCK_PATH
+              value: {{ .Values.node.kubeletDir }}/plugins/{{ include "juicefs.driverName" . }}/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: {{ .Values.node.kubeletDir }}/plugins_registry
+        - name: liveness-probe
+          image: {{ printf "%s:%s" .Values.sidecars.livenessProbe.repository .Values.sidecars.livenessProbe.tag }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - --csi-address=$(ADDRESS)
+            - --v=5
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+      volumes:
+        - name: socket-dir
+          hostPath:
+            path: {{ .Values.node.kubeletDir }}/plugins/{{ include "juicefs.driverName" . }}
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: {{ .Values.node.kubeletDir }}/plugins_registry
+            type: Directory
+        - name: cache-dir
+          hostPath:
+            path: {{ .Values.node.cacheDir }}/volume
+            type: DirectoryOrCreate
+        - name: config-dir
+          hostPath:
+            path: {{ .Values.node.cacheDir }}/config
+            type: DirectoryOrCreate
+        - name: update-conf-dir
+          hostPath:
+            path: {{ .Values.node.updateConfDir }}
+            type: DirectoryOrCreate
+        - name: mountpoint-dir
+          hostPath:
+            path: {{ .Values.node.kubeletDir }}/pods
+            type: DirectoryOrCreate
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,193 @@
+# Copyright 2026 Kube AI Hub.
+#
+# Render tests for the MinIO chart. The interesting behaviour is all in the
+# StatefulSet: how many server URLs the distributed form emits, how many
+# volumeClaimTemplates each form creates, and which shapes are refused.
+#
+# volumesPerServer defaults to 1 so that a site which does not opt into
+# distributed mode renders exactly what it did before the chart supported
+# multiple drives.
+suite: Test MinIO chart
+templates:
+  - statefulset.yaml
+  - pdb.yaml
+  - service.yaml
+  # statefulset.yaml includes secrets.yaml for its checksum annotation, so the
+  # template has to be in the render set even though no test asserts on it.
+  - secrets.yaml
+release:
+  name: ks-minio
+  namespace: kubesphere-system
+tests:
+  ## ------------------------------------------------------------------
+  ## Backwards compatibility: the default shape
+  ## ------------------------------------------------------------------
+  - it: defaults to a single standalone server with a single drive
+    template: statefulset.yaml
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 1
+      - lengthEqual:
+          path: spec.volumeClaimTemplates
+          count: 1
+      - equal:
+          path: spec.volumeClaimTemplates[0].metadata.name
+          value: data-0
+      - matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "server \\\\\n\\s+/data \\\\"
+      - notMatchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "http://"
+
+  - it: skips the PDB for a single server
+    template: pdb.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  ## ------------------------------------------------------------------
+  ## Standalone with several drives
+  ## ------------------------------------------------------------------
+  - it: supports several drives on a single standalone server
+    template: statefulset.yaml
+    set:
+      volumesPerServer: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 1
+      - lengthEqual:
+          path: spec.volumeClaimTemplates
+          count: 3
+      - equal:
+          path: spec.volumeClaimTemplates[2].metadata.name
+          value: data-2
+      - matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "server \\\\\n\\s+/data \\\\"
+
+  ## ------------------------------------------------------------------
+  ## Distributed
+  ## ------------------------------------------------------------------
+  - it: emits one drive URL per server and per volume in distributed mode
+    template: statefulset.yaml
+    set:
+      mode: distributed
+      replicas: 4
+      volumesPerServer: 2
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 4
+      - lengthEqual:
+          path: spec.volumeClaimTemplates
+          count: 2
+      - matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "http://ks-minio-0.ks-minio-svc.kubesphere-system.svc.cluster.local/data-0"
+      - matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "http://ks-minio-3.ks-minio-svc.kubesphere-system.svc.cluster.local/data-1"
+      - notMatchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "http://ks-minio-4\\."
+
+  - it: uses the headless service for the drive URLs rather than the client service
+    template: statefulset.yaml
+    set:
+      mode: distributed
+      replicas: 4
+      volumesPerServer: 2
+    asserts:
+      - equal:
+          path: spec.serviceName
+          value: ks-minio-svc
+
+  - it: pins a strict majority as the disruption budget
+    template: pdb.yaml
+    set:
+      mode: distributed
+      replicas: 4
+      volumesPerServer: 2
+    asserts:
+      - equal:
+          path: kind
+          value: PodDisruptionBudget
+      - equal:
+          path: spec.minAvailable
+          value: 3
+
+  - it: accepts an explicit disruption budget
+    template: pdb.yaml
+    documentIndex: 0
+    set:
+      mode: distributed
+      replicas: 4
+      volumesPerServer: 2
+      podDisruptionBudget.minAvailable: 2
+    asserts:
+      - equal:
+          path: spec.minAvailable
+          value: 2
+
+  - it: spreads the servers across nodes
+    template: statefulset.yaml
+    set:
+      mode: distributed
+      replicas: 4
+      volumesPerServer: 2
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey
+          value: kubernetes.io/hostname
+
+  ## ------------------------------------------------------------------
+  ## Rejected shapes
+  ## ------------------------------------------------------------------
+  - it: refuses a distributed cluster with fewer than four drives
+    template: statefulset.yaml
+    set:
+      mode: distributed
+      replicas: 2
+      volumesPerServer: 1
+    asserts:
+      - failedTemplate:
+          errorMessage: "distributed MinIO needs at least 4 drives, got 2 (replicas=2 volumesPerServer=1)"
+
+  - it: refuses a volumesPerServer of zero
+    template: statefulset.yaml
+    set:
+      volumesPerServer: 0
+    asserts:
+      - failedTemplate:
+          errorMessage: "volumesPerServer must be >= 1, got 0"
+
+  ## ------------------------------------------------------------------
+  ## Services
+  ## ------------------------------------------------------------------
+  - it: always renders the headless service the drive list depends on
+    template: service.yaml
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: metadata.name
+          value: ks-minio-svc
+      - equal:
+          path: spec.clusterIP
+          value: None
+      - equal:
+          path: spec.publishNotReadyAddresses
+          value: true
+
+  - it: renders a client service for applications
+    template: service.yaml
+    documentIndex: 1
+    asserts:
+      - equal:
+          path: metadata.name
+          value: ks-minio
+      - equal:
+          path: spec.ports[0].port
+          value: 9000

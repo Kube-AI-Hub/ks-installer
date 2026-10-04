@@ -1,0 +1,20 @@
+Copyright 2026 Kube AI Hub.
+
+MinIO is reachable in-cluster at:
+  {{ include "minio.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
+
+Mode:             {{ .Values.mode }}
+Servers:          {{ .Values.replicas }}
+Volumes/server:   {{ include "minio.volumesPerServer" . }}
+Total drives:     {{ include "minio.totalDrives" . }}
+
+Root credentials live in the Secret "{{ include "minio.secretName" . }}" under the
+keys accesskey / secretkey.
+
+Read them with:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "minio.secretName" . }} \
+    -o jsonpath='{.data.accesskey}' | base64 -d
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "minio.secretName" . }} \
+    -o jsonpath='{.data.secretkey}' | base64 -d
+
+Point JuiceFS (and any other S3 client) at the in-cluster Service address above.

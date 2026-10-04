@@ -594,16 +594,6 @@ def generate_new_cluster_configuration(api):
             cluster_configuration_spec["common"]["openldap"][
                 "volumeSize"] = cluster_configuration_spec["common"]["openldapVolumeSize"]
             del cluster_configuration_spec["common"]["openldapVolumeSize"]
-        if "minio" not in cluster_configuration_spec["common"]:
-            if "minioVolumeSize" in cluster_configuration_spec["common"]:
-                cluster_configuration_spec["common"]["minio"] = {
-                    "volumeSize": cluster_configuration_spec["common"]["minioVolumeSize"]
-                }
-                del cluster_configuration_spec["common"]["minioVolumeSize"]
-        else:
-            if "minioVolumeSize" in cluster_configuration_spec["common"]:
-                cluster_configuration_spec["common"]["minio"]["volumeSize"] = cluster_configuration_spec["common"]["minioVolumeSize"]
-                del cluster_configuration_spec["common"]["minioVolumeSize"]
 
         if cluster_configuration_status is not None and "es" in cluster_configuration_status and "status" in cluster_configuration_status[
                 "es"] and cluster_configuration_status["es"]["status"] == "enabled":

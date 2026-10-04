@@ -1,0 +1,65 @@
+# Copyright 2026 Kube AI Hub.
+#
+# Values for the juicefs-metadb chart. Rendered by
+# roles/common/tasks/juicefs-metadb-install.yaml.
+#
+# The password comes from the task (generated once, then reused) because the
+# JuiceFS CSI driver Secret must carry the same value.
+{% set storage = common.storage | default({}) %}
+{% set s3 = common.s3 %}
+{% set jf = common.juicefs | default({}) %}
+{% set jf_metadb = jf.get('metadb', {}) %}
+{% set jf_backup = jf_metadb.get('backup', {}) %}
+
+auth:
+  username: {{ jf_metadb.get('username', 'juicefs') }}
+  password: {{ juicefs_metadb_password }}
+  existingSecret: "{{ jf_metadb.get('existingSecret', '') }}"
+
+databases:
+  - {{ jf_metadb.get('database', 'juicefs_meta') }}
+
+replicas: {{ jf_metadb.get('replicas', 1) }}
+
+service:
+  port: {{ jf_metadb.get('port', 5432) }}
+
+# The static provisioner, never a JuiceFS class: the metadata database cannot
+# live on the storage it describes.
+persistence:
+  enabled: true
+  storageClass: {{ storage.get('storageClass', 'local-static') }}
+  size: {{ jf_metadb.get('size', '20Gi') }}
+
+parameters:
+  max_connections: {{ jf_metadb.get('maxConnections', 500) }}
+
+resources:
+  requests:
+    memory: {{ jf_metadb.get('requestsMemory', '2Gi') }}
+    cpu: {{ jf_metadb.get('requestsCpu', '1') }}
+  limits:
+    memory: {{ jf_metadb.get('limitsMemory', '8Gi') }}
+    cpu: {{ jf_metadb.get('limitsCpu', '4') }}
+
+{% if storage.get('nodes', []) %}
+nodeSelector:
+  node-role.kubernetes.io/storage: "true"
+tolerations:
+  - key: storage
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+{% endif %}
+
+backup:
+  enabled: {{ jf_backup.get('enabled', true) }}
+  schedule: "{{ jf_backup.get('schedule', '0 3 * * *') }}"
+  keep: {{ jf_backup.get('keep', 14) }}
+  s3:
+    endpoint: {{ s3.endpoint }}
+    accessKey: {{ s3.accessKeyID }}
+    secretKey: {{ s3.secretAccessKey }}
+    bucket: {{ jf_backup.get('bucket', 'pg-backup') }}
+    secure: {{ s3.disableSSL | default(true) | ternary(false, true) }}
+    existingSecret: "{{ jf_backup.get('existingSecret', '') }}"

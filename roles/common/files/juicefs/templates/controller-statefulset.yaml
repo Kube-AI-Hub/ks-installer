@@ -1,0 +1,163 @@
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+CSI controller.
+
+Provisioning is what the controller does: it creates a directory in the object
+store bucket for each PVC and returns a volume handle. The sidecars are standard
+SIG-Storage components; the juicefs-plugin process is the CSI implementation.
+*/ -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "juicefs.fullname" . }}-controller
+  namespace: {{ include "juicefs.namespace" . }}
+  labels:
+    {{- include "juicefs.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  serviceName: {{ include "juicefs.fullname" . }}-controller
+  selector:
+    matchLabels:
+      {{- include "juicefs.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/role: controller
+  template:
+    metadata:
+      labels:
+        {{- include "juicefs.labels" . | nindent 8 }}
+        app.kubernetes.io/role: controller
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "juicefs.fullname" . }}-controller
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: juicefs-plugin
+          image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --endpoint=$(CSI_ENDPOINT)
+            - --logtostderr
+            - --nodeid=$(NODE_NAME)
+            - --v={{ .Values.driverOptions.logLevel }}
+            - --enable-manager
+            {{- if .Values.driverOptions.mountPod }}
+            - --by-process=true
+            {{- end }}
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: JUICEFS_MOUNT_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: JUICEFS_MOUNT_IMAGE
+              value: {{ printf "%s:%s" .Values.mountImage.repository .Values.mountImage.tag | quote }}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+            - name: cache-dir
+              mountPath: /var/lib/juicefs/volume
+            - name: config-dir
+              mountPath: /var/lib/juicefs/config
+            - name: update-conf-dir
+              mountPath: /etc/juicefs
+            - name: mountpoint-dir
+              mountPath: {{ .Values.node.kubeletDir }}/pods
+              mountPropagation: Bidirectional
+        - name: csi-provisioner
+          image: {{ printf "%s:%s" .Values.sidecars.provisioner.repository .Values.sidecars.provisioner.tag }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - --csi-address=$(ADDRESS)
+            - --timeout=2m
+            - --leader-election
+            - --leader-election-namespace=$(NAMESPACE)
+            - --default-fstype=ext4
+            - --extra-create-metadata
+            - --v=5
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-resizer
+          image: {{ printf "%s:%s" .Values.sidecars.resizer.repository .Values.sidecars.resizer.tag }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - --csi-address=$(ADDRESS)
+            - --timeout=2m
+            - --leader-election
+            - --leader-election-namespace=$(NAMESPACE)
+            - --handle-volume-inuse-error=false
+            - --v=5
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: liveness-probe
+          image: {{ printf "%s:%s" .Values.sidecars.livenessProbe.repository .Values.sidecars.livenessProbe.tag }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - --csi-address=$(ADDRESS)
+            - --v=5
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+        - name: cache-dir
+          hostPath:
+            path: {{ .Values.node.cacheDir }}/volume
+            type: DirectoryOrCreate
+        - name: config-dir
+          hostPath:
+            path: {{ .Values.node.cacheDir }}/config
+            type: DirectoryOrCreate
+        - name: update-conf-dir
+          hostPath:
+            path: {{ .Values.node.updateConfDir }}
+            type: DirectoryOrCreate
+        - name: mountpoint-dir
+          hostPath:
+            path: {{ .Values.node.kubeletDir }}/pods
+            type: DirectoryOrCreate
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

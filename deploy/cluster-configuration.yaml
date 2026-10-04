@@ -42,8 +42,50 @@ spec:
     openldap:
       enabled: false
       volumeSize: 2Gi   # openldap PVC size.
-    minio:
-      volumeSize: 20Gi # Minio PVC size.
+
+    # Storage foundation. MinIO and the JuiceFS metadata database are installed
+    # by ks-installer/deploy/minio/minio-storage-tool.sh before this installer
+    # runs; the settings here only describe how to reach them.
+    #
+    # `nodes` is used to pin the metadata database and, in the tool, to place the
+    # local PVs. Leave it empty when the PVs were created by hand.
+    storage:
+      nodes: []                     # Storage nodes, e.g. ["node1", "node2"].
+      storageClass: local-static    # Static provisioner class for the PVs.
+
+    # JuiceFS CSI: ReadWriteMany StorageClass for business PVCs and the KServe
+    # model cache. `bucket` is a bucket on the MinIO cluster above.
+    juicefs:
+      enabled: true
+      storageClass: juicefs-shared
+      bucket: jfs
+      volumeName: kubeaihub
+      metadb:
+        storageClass: local-static
+        size: 20Gi
+        database: juicefs_meta
+        username: juicefs
+        replicas: 1                 # Raise to 3 once a third storage node exists.
+        backup:
+          enabled: true
+          schedule: "0 3 * * *"
+          keep: 14
+          bucket: pg-backup
+      # metaurl: postgres://juicefs:<password>@juicefs-metadb.kubesphere-system.svc:5432/juicefs_meta
+
+    # Object storage endpoint used by the platform. Required: the built-in MinIO
+    # was removed, so a missing endpoint fails the install instead of silently
+    # starting a single-node MinIO. Point it at the cluster installed by
+    # ks-installer/deploy/minio/minio-storage-tool.sh.
+    # s3:
+    #   endpoint: http://ks-minio.kubesphere-system.svc:9000
+    #   region: us-east-1
+    #   disableSSL: true
+    #   forcePathStyle: true
+    #   accessKeyID: ""
+    #   secretAccessKey: ""
+    #   openpitrixBucket: app-store
+
     monitoring:
       # type: external   # Whether to specify the external prometheus stack, and need to modify the endpoint at the next line.
       endpoint: http://prometheus-operated.kubesphere-monitoring-system.svc:9090 # Prometheus endpoint to get metrics data.

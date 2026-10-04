@@ -1,0 +1,36 @@
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+Pod disruption budget. Without it a node drain can evict several servers of the
+same erasure set at once and take the cluster below quorum. Defaults to a strict
+majority (floor(servers/2) + 1), which for 4 servers is 3.
+
+Standalone runs a single server, so a PDB would only get in the way of
+maintenance and is skipped.
+*/ -}}
+{{- $servers := int .Values.replicas -}}
+{{- if eq .Values.mode "standalone" -}}
+{{- $servers = 1 -}}
+{{- end -}}
+{{- if and .Values.podDisruptionBudget.enabled (gt $servers 1) }}
+{{- $minAvailable := .Values.podDisruptionBudget.minAvailable }}
+{{- if not $minAvailable }}
+{{- $minAvailable = add (div $servers 2) 1 }}
+{{- end }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "minio.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "minio.name" . }}
+    chart: {{ include "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  minAvailable: {{ $minAvailable }}
+  selector:
+    matchLabels:
+      app: {{ include "minio.name" . }}
+      release: {{ .Release.Name }}
+{{- end }}

@@ -76,12 +76,11 @@
   loop:
     - {op: "openpitrix-db", ks: "mysql-pvc"}
     - {op: "openpitrix-etcd", ks: "etcd-pvc"}
-#    - {openpitrix: "openpitrix-minio", ks: "minio-pvc"}
   when:
     - openpitrix_component_pod.stdout.find("openpitrix-db-deployment") != -1
 
 
-- name: KubeAIHub | Getting PersistentVolumeName (mysql/etcd/minio)
+- name: KubeAIHub | Getting PersistentVolumeName (mysql/etcd)
   block:
 
     - name: Getting PersistentVolumeName (mysql)
@@ -157,9 +156,6 @@
         - "common_result.stderr and 'is forbidden' not in common_result.stderr"
 
 
-    - import_tasks: minio-install.yaml
-
-
     - import_tasks: redis-install.yaml
 
 
@@ -174,7 +170,7 @@
     - openpitrix_component_pod.stdout.find("openpitrix-db-deployment") == -1
 
 
-- name: KubeAIHub | Setting persistentVolumeReclaimPolicy (mysql/etcd/minio)
+- name: KubeAIHub | Setting persistentVolumeReclaimPolicy (mysql/etcd)
   block:
 
     - name: Setting persistentVolumeReclaimPolicy (mysql)

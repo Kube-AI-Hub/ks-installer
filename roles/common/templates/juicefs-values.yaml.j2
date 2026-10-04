@@ -1,0 +1,64 @@
+# Copyright 2026 Kube AI Hub.
+#
+# Values for the juicefs chart. Rendered by
+# roles/common/tasks/juicefs-install.yaml.
+#
+# The StorageClass is named juicefs-shared on purpose: csghub-server selects
+# ReadWriteMany for a class whose name matches "shared".
+#
+# Attribute access goes through .get() rather than Jinja attribute lookups: a
+# missing key under common.juicefs would otherwise raise instead of falling back
+# to the default written here.
+{% set jf = common.juicefs | default({}) %}
+{% set jf_image = jf.get('image', {}) %}
+{% set jf_mount = jf.get('mountImage', {}) %}
+{% set jf_metadb = jf.get('metadb', {}) %}
+{% set jf_sc = jf.get('storageClass', 'juicefs-shared') %}
+
+image:
+  repository: {{ jf_image.get('repository', 'juicedata/juicefs-csi-driver') }}
+  tag: "{{ jf_image.get('tag', 'v0.27.0') }}"
+  pullPolicy: {{ jf_image.get('pullPolicy', 'IfNotPresent') }}
+  pullSecrets: {{ jf_image.get('pullSecrets', []) | tojson }}
+
+mountImage:
+  repository: {{ jf_mount.get('repository', 'juicedata/mount') }}
+  tag: "{{ jf_mount.get('tag', 'ce-v1.2.0') }}"
+  pullPolicy: {{ jf_mount.get('pullPolicy', 'IfNotPresent') }}
+
+storageClass:
+  name: {{ jf_sc }}
+  reclaimPolicy: {{ jf.get('reclaimPolicy', 'Retain') }}
+  volumeBindingMode: {{ jf.get('volumeBindingMode', 'Immediate') }}
+  allowVolumeExpansion: {{ jf.get('allowVolumeExpansion', true) }}
+
+volume:
+  name: {{ jf.get('volumeName', 'kubeaihub') }}
+  storage: s3
+  # The object store URL plus the bucket the data blocks live in. common.s3 has
+  # no defaults: a missing endpoint is a configuration error, not something to
+  # paper over with an in-cluster service name.
+  bucket: "{{ common.s3.endpoint }}/{{ jf.get('bucket', 'jfs') }}"
+  secure: {{ common.s3.disableSSL | default(true) | ternary(false, true) }}
+  accessKey: "{{ common.s3.accessKeyID }}"
+  secretKey: "{{ common.s3.secretAccessKey }}"
+  metaurl: >-
+    {{
+      jf.metaurl | default(
+        'postgres://'
+        ~ jf_metadb.get('username', 'juicefs')
+        ~ ':' ~ juicefs_metadb_password_lookup.stdout
+        ~ '@juicefs-metadb.kubesphere-system.svc:'
+        ~ jf_metadb.get('port', 5432)
+        ~ '/' ~ jf_metadb.get('database', 'juicefs_meta')
+      )
+    }}
+
+node:
+  kubeletDir: {{ jf.get('kubeletDir', '/var/lib/kubelet') }}
+  cacheDir: {{ jf.get('cacheDir', '/var/lib/juicefs') }}
+  updateConfDir: {{ jf.get('updateConfDir', '/etc/juicefs') }}
+
+driverOptions:
+  logLevel: {{ jf.get('logLevel', 5) }}
+  mountPod: true

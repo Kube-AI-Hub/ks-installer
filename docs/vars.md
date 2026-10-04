@@ -12,7 +12,6 @@ etcd:
   tlsEnable: true
 common:
   mysqlVolumeSize: 20Gi
-  minioVolumeSize: 20Gi
   etcdVolumeSize: 20Gi
   openldapVolumeSize: 2Gi
   redisVolumSize: 2Gi

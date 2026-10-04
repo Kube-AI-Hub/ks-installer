@@ -1,0 +1,75 @@
+---
+# JuiceFS CSI driver and the juicefs-shared StorageClass.
+#
+# Runs after juicefs-metadb-install.yaml: the driver's Secret carries the
+# metadata connection string, and a driver pointed at a database that does not
+# exist yet fails at the first PVC rather than at install time.
+#
+# The metaurl embeds the metadata database password. It is read back from the
+# Secret the metadata task created, so this task does not depend on that task's
+# facts being in scope and cannot disagree with the installed database.
+
+- name: KubeAIHub | Getting juicefs installation files
+  copy:
+    src: "{{ item }}"
+    dest: "{{ kubesphere_dir }}/"
+  loop:
+    - "juicefs"
+
+- name: KubeAIHub | Reading the JuiceFS metadata database password
+  shell: >
+    {{ bin_dir }}/kubectl -n kubesphere-system get secret juicefs-metadb
+    -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d
+  register: juicefs_metadb_password_lookup
+  changed_when: false
+  failed_when: false
+
+- name: KubeAIHub | Requiring the JuiceFS metadata database
+  fail:
+    msg: >-
+      The JuiceFS metadata database Secret was not found. juicefs-metadb must be
+      installed first; if it was deliberately skipped, set
+      common.juicefs.metaurl explicitly.
+  when:
+    - juicefs_metadb_password_lookup.stdout | default('') | length == 0
+    - common.juicefs.metaurl is not defined
+
+- name: KubeAIHub | Building the juicefs values
+  set_fact:
+    juicefs_values: "{{ lookup('template', 'juicefs-values.yaml.j2') | from_yaml }}"
+
+- name: KubeAIHub | Writing the juicefs values file
+  copy:
+    dest: "{{ kubesphere_dir }}/custom-values-juicefs.yaml"
+    content: "{{ juicefs_values | to_nice_yaml(indent=2) }}"
+
+- name: KubeAIHub | Deploying the JuiceFS CSI driver
+  shell: >
+    {{ bin_dir }}/helm upgrade --install juicefs
+    {{ kubesphere_dir }}/juicefs
+    -f {{ kubesphere_dir }}/custom-values-juicefs.yaml
+    --namespace kubesphere-system
+    --wait --timeout 600s
+  register: juicefs_status
+
+- name: KubeAIHub | Reporting a failed JuiceFS install
+  fail:
+    msg: >-
+      The JuiceFS CSI driver did not become ready.
+      Check: kubectl -n kubesphere-system get pods -l app.kubernetes.io/name=juicefs;
+      kubectl -n kubesphere-system logs statefulset/juicefs-controller.
+  when:
+    - juicefs_status is defined
+    - juicefs_status.rc | default(1) != 0
+
+- name: KubeAIHub | Importing juicefs status
+  shell: >
+    {{ bin_dir }}/kubectl patch cc ks-installer
+    --type merge
+    -p '{"status": {"juicefs": {"status": "enabled", "enabledTime": "{{ lookup('pipe','date  +%Y-%m-%dT%H:%M:%S%Z') }}"}}}'
+    -n kubesphere-system
+  register: cc_result
+  failed_when: "cc_result.stderr and 'Warning' not in cc_result.stderr"
+  until: cc_result is succeeded
+  retries: 5
+  delay: 3

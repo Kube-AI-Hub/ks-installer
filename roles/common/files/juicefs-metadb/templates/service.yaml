@@ -1,0 +1,41 @@
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+Two Services:
+  - headless: stable per-pod DNS, required by the StatefulSet.
+  - client: the address the CSI driver and any other client connects to.
+*/ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "juicefs-metadb.fullname" . }}-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "juicefs-metadb.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: postgres
+      port: {{ .Values.service.port }}
+      targetPort: postgres
+      protocol: TCP
+  selector:
+    {{- include "juicefs-metadb.selectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "juicefs-metadb.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "juicefs-metadb.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgres
+      port: {{ .Values.service.port }}
+      targetPort: postgres
+      protocol: TCP
+  selector:
+    {{- include "juicefs-metadb.selectorLabels" . | nindent 4 }}

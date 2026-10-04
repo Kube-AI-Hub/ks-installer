@@ -1,0 +1,19 @@
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+Runtime configuration. `include_if_exists` keeps the generated postgresql.conf
+authoritative while allowing the data directory's own file to add settings.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "juicefs-metadb.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "juicefs-metadb.labels" . | nindent 4 }}
+data:
+  runtime.conf: |
+    include_if_exists = '/var/lib/postgresql/data/postgresql.conf'
+    {{- range $key, $value := .Values.parameters }}
+    {{ printf "%s = %s" $key (toString $value | squote) }}
+    {{- end }}

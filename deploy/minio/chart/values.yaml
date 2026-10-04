@@ -1,0 +1,123 @@
+# Copyright 2026 Kube AI Hub.
+#
+# Defaults are deliberately conservative: mode=standalone and volumesPerServer=1
+# keep the rendered output identical to the previous single-volume behaviour, so
+# an existing site that does not opt in is unaffected.
+#
+# Distributed mode requires replicas * volumesPerServer >= 4 drives; the chart
+# fails at render time when that is not satisfied.
+
+## Kubernetes cluster domain, used to build the per-server DNS names.
+clusterDomain: cluster.local
+
+## Server mode: standalone or distributed.
+mode: standalone
+
+## Number of servers. Only meaningful in distributed mode.
+replicas: 4
+
+## Number of volumes each server gets. All servers are assumed homogeneous:
+## same count, same size, same storage class.
+volumesPerServer: 1
+
+image:
+  repository: minio/minio
+  tag: RELEASE.2025-09-07T16-13-09Z
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+mcImage:
+  repository: minio/mc
+  tag: RELEASE.2025-08-13T08-35-41Z
+  pullPolicy: IfNotPresent
+
+## Root credentials. Leave empty to generate random values on install; set
+## existingSecret to reuse a Secret that already holds accesskey/secretkey.
+accessKey: ""
+secretKey: ""
+existingSecret: ""
+
+## Mount path inside the container. Every drive is mounted under
+## <mountPath>-<n> so the server argument list stays readable.
+mountPath: /data
+
+configPath: "/root/.minio/"
+configPathmc: "/root/.mc/"
+
+## Extra flags appended to `minio server`.
+extraArgs: []
+
+service:
+  type: ClusterIP
+  port: 9000
+  # nodePort is only used when type is NodePort.
+  nodePort: ""
+  annotations: {}
+
+## Serve the S3 API over TLS. Off by default: the API is only reachable inside
+## the cluster, and the certificate would have to be issued for the headless
+## Service names.
+tls:
+  enabled: false
+
+console:
+  enabled: false
+  service:
+    port: 9001
+
+## Buckets created after install. Policy is one of none, download, upload, public.
+buckets: []
+
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 5Ti
+
+resources:
+  requests:
+    memory: 4Gi
+    cpu: "1"
+  limits:
+    memory: 16Gi
+    cpu: "4"
+
+## Pod disruption budget. Defaults to a strict majority of the servers so a
+## voluntary disruption (node drain, upgrade) cannot take out quorum.
+podDisruptionBudget:
+  enabled: true
+  # Empty means "strict majority of replicas".
+  minAvailable: ""
+
+## Placement. Set nodeSelector to the storage node label and tolerations to the
+## matching taint so the cluster only runs on the designated nodes.
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+## Spread the servers across nodes. Distributed MinIO loses redundancy when two
+## replicas of the same set land on one node, so this is on by default.
+podAntiAffinity:
+  enabled: true
+  topologyKey: kubernetes.io/hostname
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 15
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 3
+
+livenessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 15
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 3

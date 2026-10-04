@@ -1,0 +1,164 @@
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+pg_dump backup.
+
+The metadata lives on local storage the cluster cannot rebuild, and the object
+store holds the blocks but not the directory tree that makes sense of them. A
+nightly dump is what turns "the metadata disk failed" into a restore instead of
+"every object is now orphaned".
+
+The dump is produced by an init container running the postgres image, because the
+mc image has no pg_dump; the main container then uploads from the shared volume.
+Init containers finish before the main container starts, so the ordering does not
+need a waiting loop.
+
+Each run writes <bucket>/<date>/<database>.dump and refreshes a LATEST pointer,
+so a restore does not need to know the date. Old runs are pruned by date.
+*/ -}}
+{{- if .Values.backup.enabled }}
+{{- if and (not .Values.backup.s3.existingSecret) (or (not .Values.backup.s3.endpoint) (not .Values.backup.s3.accessKey) (not .Values.backup.s3.secretKey)) }}
+{{- fail "backup.s3.{endpoint,accessKey,secretKey} are required when backup.enabled is true (or set backup.s3.existingSecret). There is no built-in object store to fall back on." }}
+{{- end }}
+{{- if not .Values.backup.s3.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "juicefs-metadb.fullname" . }}-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "juicefs-metadb.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  S3_ENDPOINT: {{ .Values.backup.s3.endpoint | quote }}
+  S3_ACCESS_KEY: {{ .Values.backup.s3.accessKey | quote }}
+  S3_SECRET_KEY: {{ .Values.backup.s3.secretKey | quote }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "juicefs-metadb.fullname" . }}-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "juicefs-metadb.labels" . | nindent 4 }}
+data:
+  upload.sh: |-
+    #!/bin/sh
+    set -eu
+
+    fail() { echo "ERROR: $*" >&2; exit 1; }
+
+    : "${S3_ENDPOINT:?S3_ENDPOINT is required}"
+    : "${S3_BUCKET:?S3_BUCKET is required}"
+
+    SCHEME=http
+    [ "${S3_SECURE:-false}" = "true" ] && SCHEME=https
+
+    mc alias set backup "$SCHEME://$S3_ENDPOINT" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" \
+      || fail "cannot configure the backup object store"
+    mc mb --ignore-existing "backup/$S3_BUCKET" >/dev/null \
+      || fail "cannot reach bucket $S3_BUCKET"
+
+    # A dated directory per run, so a bad dump never overwrites a good one.
+    STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+    mc cp --recursive /dump/ "backup/$S3_BUCKET/$STAMP/" || fail "upload failed"
+
+    # Refresh the pointer a restore reads without knowing the date.
+    printf '%s\n' "$STAMP" > /dump/LATEST
+    mc cp /dump/LATEST "backup/$S3_BUCKET/LATEST" >/dev/null || fail "cannot update LATEST"
+
+    # Keep the newest $BACKUP_KEEP dated directories and drop the rest.
+    mc ls "backup/$S3_BUCKET/" \
+      | awk '/\/$/ { print $NF }' \
+      | sed 's:/$::' \
+      | grep -E '^[0-9]{8}T[0-9]{6}Z$' \
+      | sort -r \
+      | awk -v keep="${BACKUP_KEEP:-14}" 'NR > keep' \
+      | while read -r old; do
+          echo "pruning $old"
+          mc rm --recursive --force "backup/$S3_BUCKET/$old" >/dev/null || true
+        done
+
+    echo "backup complete: $S3_BUCKET/$STAMP"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "juicefs-metadb.fullname" . }}-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "juicefs-metadb.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.backupJob.historyLimit }}
+  failedJobsHistoryLimit: {{ .Values.backupJob.historyLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.backupJob.backoffLimit }}
+      activeDeadlineSeconds: {{ .Values.backupJob.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "juicefs-metadb.selectorLabels" . | nindent 12 }}
+            kubeaihub.io/juicefs-metadb-operation: backup
+        spec:
+          restartPolicy: OnFailure
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            fsGroup: 999
+          volumes:
+            - name: dump
+              emptyDir: {}
+            - name: scripts
+              configMap:
+                name: {{ include "juicefs-metadb.fullname" . }}-backup
+                defaultMode: 0755
+          initContainers:
+            - name: pg-dump
+              image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  for db in $(printf '%s' "$POSTGRES_MULTIPLE_DATABASES" | tr ',' ' '); do
+                    echo "dumping $db"
+                    pg_dump -U "$POSTGRES_USER" -h 127.0.0.1 -d "$db" -Fc -f "/dump/$db.dump"
+                  done
+              envFrom:
+                - secretRef:
+                    name: {{ include "juicefs-metadb.secretName" . }}
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+          containers:
+            - name: upload
+              image: {{ printf "%s:%s" .Values.backup.image.repository .Values.backup.image.tag }}
+              imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
+              command: ["/bin/sh", "/scripts/upload.sh"]
+              env:
+                - name: S3_BUCKET
+                  value: {{ .Values.backup.s3.bucket | quote }}
+                - name: S3_SECURE
+                  value: {{ .Values.backup.s3.secure | quote }}
+                - name: BACKUP_KEEP
+                  value: {{ .Values.backup.keep | quote }}
+              envFrom:
+                - secretRef:
+                    name: {{ include "juicefs-metadb.backupSecretName" . }}
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+                - name: scripts
+                  mountPath: /scripts
+{{- end }}

@@ -1,0 +1,16 @@
+# Copyright 2026 Kube AI Hub.
+apiVersion: v2
+name: juicefs-metadb
+description: PostgreSQL cluster holding the JuiceFS metadata for the KubeSphere
+  storage foundation. Kept separate from MinIO and from any JuiceFS-backed volume
+  so the metadata never depends on the storage it describes.
+type: application
+version: 0.1.0
+appVersion: "15.19"
+keywords:
+  - storage
+  - juicefs
+  - postgresql
+home: https://juicefs.com
+sources:
+  - https://github.com/juicedata/juicefs

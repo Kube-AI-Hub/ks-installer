@@ -28,20 +28,6 @@
     - redis_db_pvc.stdout != ""
   failed_when: false
 
-- name: KubeAIHub | Checking minio PersistentVolumeClaim
-  shell: >
-    {{ bin_dir }}/kubectl get pvc -n kubesphere-system minio -o jsonpath='{.spec.resources.requests.storage}'
-  register: minio_storage_pvc
-  failed_when: false
-
-- name: KubeAIHub | Setting minio pv size
-  set_fact:
-    minio_storage_pv_size: "{{ minio_storage_pvc.stdout }}"
-  when:
-    - minio_storage_pvc.rc == 0
-    - minio_storage_pvc.stdout != ""
-  failed_when: false
-
 - name: KubeAIHub | Checking openldap PersistentVolumeClaim
   shell: >
     {{ bin_dir }}/kubectl get pvc -n kubesphere-system openldap-pvc-openldap-0 -o jsonpath='{.spec.resources.requests.storage}'

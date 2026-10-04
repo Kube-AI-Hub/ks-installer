@@ -1,0 +1,85 @@
+---
+# JuiceFS metadata database.
+#
+# Runs before the JuiceFS CSI driver: the driver's Secret points at this Service,
+# and the driver cannot mount anything until the database answers.
+#
+# The metadata MUST NOT live on JuiceFS: reading a JuiceFS volume needs the
+# metadata, so a metadata database stored on JuiceFS could never come back up.
+# persistence.storageClass is therefore pinned to the static provisioner.
+
+- name: KubeAIHub | Getting juicefs-metadb installation files
+  copy:
+    src: "{{ item }}"
+    dest: "{{ kubesphere_dir }}/"
+  loop:
+    - "juicefs-metadb"
+
+- name: KubeAIHub | Checking JuiceFS metadata database status
+  shell: >
+    {{ bin_dir }}/helm list -a -n kubesphere-system | grep "juicefs-metadb"
+  register: juicefs_metadb_check
+  failed_when: false
+
+# The password is shared with the CSI driver Secret, so it is generated once and
+# reused on every later run. A new random value on upgrade would leave the driver
+# unable to reach the database it already has data in.
+- name: KubeAIHub | Resolving the JuiceFS metadata database password
+  block:
+    - name: KubeAIHub | Reading the existing metadata database password
+      shell: >
+        {{ bin_dir }}/kubectl -n kubesphere-system get secret juicefs-metadb
+        -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d
+      register: juicefs_metadb_existing_password
+      failed_when: false
+      changed_when: false
+
+    - name: KubeAIHub | Generating the metadata database password
+      set_fact:
+        juicefs_metadb_password: >-
+          {{
+            juicefs_metadb_existing_password.stdout
+            if (juicefs_metadb_existing_password.stdout | default('') | length > 0)
+            else lookup('password', '/dev/null length=32 chars=ascii_letters,digits')
+          }}
+
+- name: KubeAIHub | Building the juicefs-metadb values
+  set_fact:
+    juicefs_metadb_values: "{{ lookup('template', 'juicefs-metadb-values.yaml.j2') | from_yaml }}"
+
+- name: KubeAIHub | Writing the juicefs-metadb values file
+  copy:
+    dest: "{{ kubesphere_dir }}/custom-values-juicefs-metadb.yaml"
+    content: "{{ juicefs_metadb_values | to_nice_yaml(indent=2) }}"
+
+- name: KubeAIHub | Deploying the JuiceFS metadata database
+  shell: >
+    {{ bin_dir }}/helm upgrade --install juicefs-metadb
+    {{ kubesphere_dir }}/juicefs-metadb
+    -f {{ kubesphere_dir }}/custom-values-juicefs-metadb.yaml
+    --namespace kubesphere-system
+    --wait --timeout 600s
+  register: juicefs_metadb_status
+
+- name: KubeAIHub | Reporting a failed metadata database install
+  fail:
+    msg: >-
+      The JuiceFS metadata database did not become ready.
+      Check: kubectl -n kubesphere-system get pods -l app.kubernetes.io/name=juicefs-metadb;
+      kubectl -n kubesphere-system describe pvc data-juicefs-metadb-0
+      (a Pending PVC usually means 'prepare' has not created the metadata PVs).
+  when:
+    - juicefs_metadb_status is defined
+    - juicefs_metadb_status.rc | default(1) != 0
+
+- name: KubeAIHub | Importing juicefs-metadb status
+  shell: >
+    {{ bin_dir }}/kubectl patch cc ks-installer
+    --type merge
+    -p '{"status": {"juicefsMetadb": {"status": "enabled", "enabledTime": "{{ lookup('pipe','date  +%Y-%m-%dT%H:%M:%S%Z') }}"}}}'
+    -n kubesphere-system
+  register: cc_result
+  failed_when: "cc_result.stderr and 'Warning' not in cc_result.stderr"
+  until: cc_result is succeeded
+  retries: 5
+  delay: 3

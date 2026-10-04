@@ -1,0 +1,16 @@
+# Copyright 2026 Kube AI Hub.
+apiVersion: v2
+name: juicefs
+description: JuiceFS CSI driver for the KubeSphere storage foundation. Provides a
+  ReadWriteMany StorageClass whose data blocks live in the MinIO cluster and whose
+  metadata lives in the independent PostgreSQL metadata database.
+type: application
+version: 0.1.0
+appVersion: "v0.27.0"
+keywords:
+  - storage
+  - juicefs
+  - csi
+home: https://juicefs.com
+sources:
+  - https://github.com/juicedata/juicefs-csi-driver

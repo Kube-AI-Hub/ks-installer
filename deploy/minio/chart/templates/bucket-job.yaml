@@ -1,0 +1,108 @@
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+Bucket bootstrap. Runs as a post-install/post-upgrade hook so re-running the
+install is idempotent; the script only creates what is missing.
+*/ -}}
+{{- if .Values.buckets }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "minio.fullname" . }}-make-bucket
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "minio.name" . }}
+    chart: {{ include "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+data:
+  initialize: |-
+    #!/bin/sh
+    set -e
+    connect() {
+      ATTEMPTS=0
+      LIMIT=60
+      ACCESS=$(cat /config/accesskey)
+      SECRET=$(cat /config/secretkey)
+      MC="mc alias set myminio $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT $ACCESS $SECRET"
+      $MC || true
+      until $MC >/dev/null 2>&1; do
+        ATTEMPTS=$((ATTEMPTS + 1))
+        if [ "$ATTEMPTS" -gt "$LIMIT" ]; then
+          echo "MinIO is not reachable after $LIMIT attempts" >&2
+          exit 1
+        fi
+        sleep 2
+      done
+    }
+    create_bucket() {
+      BUCKET=$1
+      POLICY=$2
+      if mc ls "myminio/$BUCKET" >/dev/null 2>&1; then
+        echo "bucket '$BUCKET' already exists"
+      else
+        echo "creating bucket '$BUCKET'"
+        mc mb "myminio/$BUCKET"
+      fi
+      if [ -n "$POLICY" ] && [ "$POLICY" != "none" ]; then
+        mc anonymous set "$POLICY" "myminio/$BUCKET"
+      fi
+    }
+    SCHEME={{ if .Values.tls.enabled }}https{{ else }}http{{ end }}
+    connect
+    {{- range .Values.buckets }}
+    create_bucket {{ .name }} {{ .policy | default "none" }}
+    {{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "minio.fullname" . }}-make-bucket-job
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "minio.name" . }}-make-bucket-job
+    chart: {{ include "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 20
+  template:
+    metadata:
+      labels:
+        app: {{ include "minio.name" . }}-make-bucket-job
+        release: {{ .Release.Name }}
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: minio-configuration
+          projected:
+            sources:
+              - configMap:
+                  name: {{ include "minio.fullname" . }}-make-bucket
+              - secret:
+                  name: {{ include "minio.secretName" . }}
+      containers:
+        - name: minio-mc
+          image: {{ printf "%s:%s" .Values.mcImage.repository .Values.mcImage.tag }}
+          imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
+          command: ["/bin/sh", "/config/initialize"]
+          env:
+            - name: MINIO_ENDPOINT
+              value: {{ include "minio.fullname" . }}
+            - name: MINIO_PORT
+              value: {{ .Values.service.port | quote }}
+          volumeMounts:
+            - name: minio-configuration
+              mountPath: /config
+{{- end }}

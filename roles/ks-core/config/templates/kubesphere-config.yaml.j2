@@ -53,12 +53,13 @@ data:
 {% endif %}
 {% if devops.enabled %}
     s3:
-      endpoint: {{ common.s3.endpoint | default('http://minio.kubesphere-system.svc:9000') }}
+      {# Object storage is external: endpoint and credentials have no defaults. #}
+      endpoint: {{ common.s3.endpoint }}
       region: {{ common.s3.region | default('us-east-1') }}
       disableSSL: {{ common.s3.disableSSL | default(true) }}
       forcePathStyle: {{ common.s3.forcePathStyle | default(true) }}
-      accessKeyID: {{ common.s3.accessKeyID | default('openpitrixminioaccesskey') }}
-      secretAccessKey: {{ common.s3.secretAccessKey | default('openpitrixminiosecretkey') }}
+      accessKeyID: {{ common.s3.accessKeyID }}
+      secretAccessKey: {{ common.s3.secretAccessKey }}
       bucket: s2i-binaries
 {% endif %}
 {% if network is defined or networkpolicy is defined %}
@@ -97,12 +98,13 @@ data:
 {% if openpitrix.store is defined and openpitrix.store.enabled is defined and openpitrix.store.enabled %}
     openpitrix:
       s3:
-        endpoint: {{ common.s3.endpoint | default('http://minio.kubesphere-system.svc:9000') }}
+        {# Object storage is external: endpoint and credentials have no defaults. #}
+        endpoint: {{ common.s3.endpoint }}
         region: {{ common.s3.region | default('us-east-1') }}
         disableSSL: {{ common.s3.disableSSL | default(true) }}
         forcePathStyle: {{ common.s3.forcePathStyle | default(true) }}
-        accessKeyID: {{ common.s3.accessKeyID | default('openpitrixminioaccesskey') }}
-        secretAccessKey: {{ common.s3.secretAccessKey | default('openpitrixminiosecretkey') }}
+        accessKeyID: {{ common.s3.accessKeyID }}
+        secretAccessKey: {{ common.s3.secretAccessKey }}
         bucket: {{ common.s3.openpitrixBucket | default('app-store') }}
 {% endif %}
     multicluster:

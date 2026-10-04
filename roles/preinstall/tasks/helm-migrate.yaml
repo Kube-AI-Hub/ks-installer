@@ -6,7 +6,6 @@
   loop:
     - "ks-openldap"
     - "ks-redis"
-    - "ks-minio"
     - "ks-openpitrix"
     - "elasticsearch-logging"
     - "elasticsearch-logging-curator"
