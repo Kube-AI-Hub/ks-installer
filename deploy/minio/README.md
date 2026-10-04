@@ -132,8 +132,12 @@ itself needs. The platform on top of it needs its own buckets too: each service
 derives its bucket from its name, so a full install wants
 
 ```sh
---buckets jfs,pg-backup,csghub-registry,csghub-billing,csghub-server,csghub-runner,csghub-llmlog
+--buckets jfs,pg-backup,csghub-server,csghub-runner,csghub-registry,csghub-billing,csghub-llmlog
 ```
+
+Check the list against the buckets the cluster already has before migrating, and
+add any that are missing from this list. The B200 cluster, for example, also
+carries `csghub-portal`, `csghub-portal-public` and `csghub-xnet`.
 
 The bucket list is idempotent: re-running `install` creates what is missing and
 leaves existing buckets, their contents and their policies alone.
@@ -205,7 +209,8 @@ target an exact mirror of the backup.
 
 # 3. install the new cluster
 ./minio-storage-tool.sh install --replicas 4 --volumes-per-server 3 \
-  --buckets jfs,pg-backup --storage-nodes n1,n2,n3,n4
+  --buckets jfs,pg-backup,csghub-server,csghub-runner,csghub-registry,csghub-billing,csghub-llmlog \
+  --storage-nodes n1,n2,n3,n4
 
 # 4. restore, verifying against the manifest
 ./minio-storage-tool.sh import --backup-pvc minio-backup
