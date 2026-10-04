@@ -76,6 +76,19 @@ tests:
           path: data["runtime.conf"]
           pattern: "max_connections = '500'"
 
+  - it: listens on all interfaces, after the image config that would say otherwise
+    template: configmap.yaml
+    asserts:
+      # Order matters: the includes come first so listen_addresses wins. If it
+      # came first, the image's own localhost setting would override it and the
+      # database would refuse every non-local connection.
+      - matchRegex:
+          path: data["runtime.conf"]
+          pattern: "include_if_exists[\\s\\S]*listen_addresses = '\\*'"
+      - notMatchRegex:
+          path: data["runtime.conf"]
+          pattern: "listen_addresses = '\\*'[\\s\\S]*include_if_exists"
+
   - it: runs a single primary by default
     template: statefulset.yaml
     asserts:

@@ -89,7 +89,10 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           readinessProbe:
             exec:
-              command: ["pg_isready", "-h", "127.0.0.1", "-p", "5432"]
+              # -U matters: without it pg_isready connects as the container's OS
+              # user, which postgres rejects with a confusing "role does not
+              # exist" in the log even though the probe result is correct.
+              command: ["pg_isready", "-U", {{ .Values.auth.username | quote }}, "-h", "127.0.0.1", "-p", "5432"]
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5

@@ -45,10 +45,16 @@ databases:
 ## would add a standby that nothing promotes. Raise to 3 once a third node exists.
 replicas: 1
 
-## PostgreSQL runtime parameters. max_connections matters here: the CSI driver
-## opens one long-lived connection per mounted volume, so a node running many
-## mounts multiplies the connection count.
+## PostgreSQL runtime parameters.
+##
+## max_connections matters here: the CSI driver opens one long-lived connection
+## per mounted volume, so a node running many mounts multiplies the count.
+##
+## listen_addresses must be '*' or the database only accepts connections from
+## localhost: the probes then fail against the pod IP and the CSI driver is
+## refused by the Service, which looks like the database being down.
 parameters:
+  listen_addresses: "*"
   max_connections: 500
   shared_buffers: "512MB"
 
