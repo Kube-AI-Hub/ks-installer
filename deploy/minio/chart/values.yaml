@@ -21,14 +21,24 @@ replicas: 4
 volumesPerServer: 1
 
 image:
+  ## Optional registry prefix, for example dockerhub.kubekey.local/kube-ai-hub.
+  registry: ""
   repository: minio/minio
   tag: RELEASE.2025-09-07T16-13-09Z
   pullPolicy: IfNotPresent
   pullSecrets: []
 
+## Image the bucket and mirror jobs run their scripts in.
+##
+## Those jobs need two things at once: the `mc` client, and a shell with awk, sed
+## and grep. The MinIO server image ships `mc` at /usr/bin/mc but only a minimal
+## shell, and the separate minio/mc image is not published on every registry this
+## runs against. The jobs therefore run in busybox and copy `mc` out of the
+## server image in an init container, which needs no image beyond the two below.
 mcImage:
-  repository: minio/mc
-  tag: RELEASE.2025-08-13T08-35-41Z
+  registry: ""
+  repository: busybox
+  tag: "1.37.0"
   pullPolicy: IfNotPresent
 
 ## Root credentials. Leave empty to generate random values on install; set

@@ -51,7 +51,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: juicefs-plugin
-          image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag }}
+          image: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.image) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - --endpoint=$(CSI_ENDPOINT)
@@ -77,7 +77,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: JUICEFS_MOUNT_IMAGE
-              value: {{ printf "%s:%s" .Values.mountImage.repository .Values.mountImage.tag | quote }}
+              value: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.mountImage) | quote }}
           securityContext:
             privileged: true
           resources:
@@ -96,7 +96,7 @@ spec:
               mountPath: {{ .Values.node.kubeletDir }}/pods
               mountPropagation: Bidirectional
         - name: node-driver-registrar
-          image: {{ printf "%s:%s" .Values.sidecars.nodeDriverRegistrar.repository .Values.sidecars.nodeDriverRegistrar.tag }}
+          image: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.sidecars.nodeDriverRegistrar) }}
           imagePullPolicy: IfNotPresent
           args:
             - --csi-address=$(ADDRESS)
@@ -113,7 +113,7 @@ spec:
             - name: registration-dir
               mountPath: {{ .Values.node.kubeletDir }}/plugins_registry
         - name: liveness-probe
-          image: {{ printf "%s:%s" .Values.sidecars.livenessProbe.repository .Values.sidecars.livenessProbe.tag }}
+          image: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.sidecars.livenessProbe) }}
           imagePullPolicy: IfNotPresent
           args:
             - --csi-address=$(ADDRESS)

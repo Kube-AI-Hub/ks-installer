@@ -43,7 +43,7 @@ spec:
       {{- end }}
       containers:
         - name: juicefs-plugin
-          image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag }}
+          image: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.image) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - --endpoint=$(CSI_ENDPOINT)
@@ -70,7 +70,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: JUICEFS_MOUNT_IMAGE
-              value: {{ printf "%s:%s" .Values.mountImage.repository .Values.mountImage.tag | quote }}
+              value: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.mountImage) | quote }}
           securityContext:
             privileged: true
           volumeMounts:
@@ -86,7 +86,7 @@ spec:
               mountPath: {{ .Values.node.kubeletDir }}/pods
               mountPropagation: Bidirectional
         - name: csi-provisioner
-          image: {{ printf "%s:%s" .Values.sidecars.provisioner.repository .Values.sidecars.provisioner.tag }}
+          image: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.sidecars.provisioner) }}
           imagePullPolicy: IfNotPresent
           args:
             - --csi-address=$(ADDRESS)
@@ -107,7 +107,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-resizer
-          image: {{ printf "%s:%s" .Values.sidecars.resizer.repository .Values.sidecars.resizer.tag }}
+          image: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.sidecars.resizer) }}
           imagePullPolicy: IfNotPresent
           args:
             - --csi-address=$(ADDRESS)
@@ -127,7 +127,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: liveness-probe
-          image: {{ printf "%s:%s" .Values.sidecars.livenessProbe.repository .Values.sidecars.livenessProbe.tag }}
+          image: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.sidecars.livenessProbe) }}
           imagePullPolicy: IfNotPresent
           args:
             - --csi-address=$(ADDRESS)

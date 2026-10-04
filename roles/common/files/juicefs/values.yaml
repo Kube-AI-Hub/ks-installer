@@ -12,11 +12,17 @@
 # name matches `shared` and ReadWriteOnce for one matching `local`, so the access
 # mode follows from the name without any application change.
 
+## Registry prefix applied to every image below, for example
+## dockerhub.kubekey.local/kube-ai-hub. A per-image `registry` overrides it.
+imageRegistry: ""
+
 ## Driver namespace. The CSI Secret and StorageClass reference it explicitly, so
 ## the two must agree.
 namespaceOverride: ""
 
 image:
+  ## Optional registry prefix, for example dockerhub.kubekey.local/kube-ai-hub.
+  registry: ""
   repository: juicedata/juicefs-csi-driver
   tag: "v0.27.0"
   pullPolicy: IfNotPresent
@@ -26,21 +32,27 @@ image:
 ## the driver on an air-gapped site.
 sidecars:
   provisioner:
+    registry: ""
     repository: registry.k8s.io/sig-storage/csi-provisioner
     tag: "v5.1.0"
   resizer:
+    registry: ""
     repository: registry.k8s.io/sig-storage/csi-resizer
     tag: "v1.12.0"
   livenessProbe:
+    registry: ""
     repository: registry.k8s.io/sig-storage/livenessprobe
     tag: "v2.14.0"
   nodeDriverRegistrar:
+    registry: ""
     repository: registry.k8s.io/sig-storage/csi-node-driver-registrar
     tag: "v2.12.0"
 
 ## Image used for the per-volume mount pods. It only has to contain the juicefs
 ## client, not the CSI plugin.
 mountImage:
+  ## Optional registry prefix, for example dockerhub.kubekey.local/kube-ai-hub.
+  registry: ""
   repository: juicedata/mount
   tag: "ce-v1.2.0"
   pullPolicy: IfNotPresent

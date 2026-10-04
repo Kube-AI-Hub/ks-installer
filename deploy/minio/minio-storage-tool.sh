@@ -36,6 +36,24 @@ log()  { printf '%s\n' "$*"; }
 warn() { printf '%s\n' "$*" >&2; }
 die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+# Scratch space for generated manifests and scripts.
+#
+# A `trap ... RETURN` inside a function cannot be used for this: bash unsets the
+# function's `local` variables before the RETURN trap runs, so a trap referencing
+# them fails under `set -u`. One directory and an EXIT trap avoids the problem.
+WORK_DIR=""
+cleanup_work_dir() {
+  [ -n "$WORK_DIR" ] && rm -rf "$WORK_DIR"
+  return 0
+}
+trap cleanup_work_dir EXIT
+
+new_work_file() {
+  local name="$1"
+  [ -n "$WORK_DIR" ] || WORK_DIR="$(mktemp -d)"
+  printf '%s/%s' "$WORK_DIR" "$name"
+}
+
 usage() {
   cat <<'EOF'
 minio-storage-tool.sh <command> [options]
@@ -100,6 +118,9 @@ Options:
   --volumes-per-server <n>     Drives per server (default 2).
   --storage-class <name>       StorageClass for the drives (default local-static).
   --volume-size <q>            Drive capacity (default 5Ti).
+  --image-registry <prefix>    Registry prefix for the MinIO and job images, for
+                               example dockerhub.kubekey.local/kube-ai-hub.
+                               Defaults to no prefix.
   --buckets <b1,b2,...>        Buckets to create (default jfs,pg-backup).
   --storage-nodes <n1,n2,...>  Pin MinIO to these nodes via nodeSelector.
   --storage-node-label <k>     Node label key for placement
@@ -144,8 +165,9 @@ Options:
   --buckets <b1,b2,...>        Only these buckets (default: all buckets).
   --exclude <b1,b2,...>        Skip these buckets.
   --mount-path <p>             Mount path inside the Job (default /backup).
-  --image <img>                mc image. Defaults to $MC_IMAGE, else the tag the
-                               chart ships with.
+  --image-registry <prefix>    Registry prefix for the job images, for example
+                               dockerhub.kubekey.local/kube-ai-hub. Defaults to
+                               no prefix.
   --no-remove                  Do not delete backup objects that no longer exist
                                in MinIO. By default the backup is an exact
                                mirror of the source.
@@ -188,8 +210,9 @@ Options:
   --buckets <b1,b2,...>        Only these buckets (default: all in the backup).
   --exclude <b1,b2,...>        Skip these buckets.
   --mount-path <p>             Mount path inside the Job (default /backup).
-  --image <img>                mc image. Defaults to $MC_IMAGE, else the tag the
-                               chart ships with.
+  --image-registry <prefix>    Registry prefix for the job images, for example
+                               dockerhub.kubekey.local/kube-ai-hub. Defaults to
+                               no prefix.
   --remove                     Delete objects in MinIO that are missing from the
                                backup. Off by default: a restore never destroys
                                live data unless you ask for it.
@@ -216,6 +239,7 @@ install_minio() {
   local vps="2"
   local storage_class="local-static"
   local volume_size="5Ti"
+  local image_registry=""
   local buckets="jfs,pg-backup"
   local storage_nodes=""
   local node_label="node-role.kubernetes.io/storage"
@@ -233,6 +257,7 @@ install_minio() {
       --volumes-per-server)  vps="${2:-}"; shift 2 ;;
       --storage-class)       storage_class="${2:-}"; shift 2 ;;
       --volume-size)         volume_size="${2:-}"; shift 2 ;;
+      --image-registry)      image_registry="${2:-}"; shift 2 ;;
       --buckets)             buckets="${2:-}"; shift 2 ;;
       --storage-nodes)       storage_nodes="${2:-}"; shift 2 ;;
       --storage-node-label)  node_label="${2:-}"; shift 2 ;;
@@ -270,6 +295,13 @@ install_minio() {
     --set "persistence.storageClass=${storage_class}"
     --set "persistence.size=${volume_size}"
   )
+
+  if [ -n "$image_registry" ]; then
+    # One prefix for both the server and the job image keeps a site's mirror
+    # layout (for example <registry>/minio/minio) working unchanged.
+    set_args+=(--set "image.registry=${image_registry}")
+    set_args+=(--set "mcImage.registry=${image_registry}")
+  fi
 
   if [ -n "$storage_nodes" ]; then
     # --set-json rather than --set: a node label key contains dots, which --set
@@ -316,7 +348,7 @@ install_minio() {
   log "   ${mode}, ${replicas} servers x ${vps} drives = $((replicas * vps)) drives"
   local values_file=""
   if [ -n "$buckets_yaml" ]; then
-    values_file="$(mktemp)"
+    values_file="$(new_work_file buckets.yaml)"
     printf 'buckets:\n%s' "$buckets_yaml" > "$values_file"
   fi
 
@@ -326,8 +358,6 @@ install_minio() {
     ${values_file:+-f "$values_file"} \
     ${extra_values:+-f "$extra_values"} \
     --wait --timeout 15m
-
-  [ -n "$values_file" ] && rm -f "$values_file"
 
   log "== done"
   log "   in-cluster endpoint: ${release}.${namespace}.svc:9000"
@@ -469,8 +499,7 @@ EOF
   done
 
   local manifest
-  manifest="$(mktemp)"
-  trap 'rm -f "$manifest"' RETURN
+  manifest="$(new_work_file pv-manifest.yaml)"
 
   apply_storage_class > "$manifest"
   for node in "${node_list[@]}"; do
@@ -545,7 +574,9 @@ parse_mirror_options() {
   m_namespace="kubesphere-system"
   m_release="ks-minio"
   m_mount_path="/backup"
-  m_image="${MC_IMAGE:-}"
+  m_registry=""
+  m_image=""
+  m_source_image=""
   m_buckets=""
   m_exclude=""
   m_timeout="6h"
@@ -568,7 +599,7 @@ parse_mirror_options() {
       --buckets)            m_buckets="${2:-}"; shift 2 ;;
       --exclude)            m_exclude="${2:-}"; shift 2 ;;
       --mount-path)         m_mount_path="${2:-}"; shift 2 ;;
-      --image)              m_image="${2:-}"; shift 2 ;;
+      --image-registry)     m_registry="${2:-}"; shift 2 ;;
       --timeout)            m_timeout="${2:-}"; shift 2 ;;
       --no-wait)            m_wait="false"; shift ;;
       --dry-run)            m_dry_run="true"; shift ;;
@@ -621,18 +652,32 @@ parse_mirror_options() {
     m_minio_endpoint="http://${m_release}.${m_namespace}.svc:9000"
   fi
 
-  # Default the mc image to the tag the chart ships, so an export or import runs
-  # with a client that matches the installed server.
-  if [ -z "$m_image" ]; then
-    local chart_dir="${CHART_DIR:-$(dirname "$0")/chart}"
-    if [ -f "$chart_dir/values.yaml" ]; then
-      local repo tag
-      repo=$(sed -n 's/^ *repository: *//p' "$chart_dir/values.yaml" | sed -n 2p)
-      tag=$(sed -n 's/^ *tag: *//p' "$chart_dir/values.yaml" | sed -n 2p)
-      [ -n "$repo" ] && [ -n "$tag" ] && m_image="${repo}:${tag}"
-    fi
+  # The mirror jobs need two images: busybox to run the script in (it has awk,
+  # sed and grep) and the MinIO server image to copy the mc binary out of. The
+  # separate minio/mc image is not published on every registry this runs against,
+  # so it is not used.
+  #
+  # Defaults come from the chart's values.yaml so an export or import runs with a
+  # client matching the installed server.
+  local chart_dir="${CHART_DIR:-$(dirname "$0")/chart}"
+  local minio_repo="minio/minio" minio_tag=""
+  local tools_repo="busybox" tools_tag="1.37.0"
+  if [ -f "$chart_dir/values.yaml" ]; then
+    # Strip the YAML quotes: values.yaml writes tags as "1.37.0".
+    minio_repo=$(sed -n 's/^  repository: *//p' "$chart_dir/values.yaml" | sed -n 1p | tr -d '"')
+    minio_tag=$(sed -n 's/^  tag: *//p' "$chart_dir/values.yaml" | sed -n 1p | tr -d '"')
+    tools_repo=$(sed -n 's/^  repository: *//p' "$chart_dir/values.yaml" | sed -n 2p | tr -d '"')
+    tools_tag=$(sed -n 's/^  tag: *//p' "$chart_dir/values.yaml" | sed -n 2p | tr -d '"')
   fi
-  [ -n "$m_image" ] || die "cannot determine the mc image, pass --image"
+  [ -n "$minio_repo" ] || minio_repo="minio/minio"
+  [ -n "$minio_tag" ] || minio_tag="latest"
+  [ -n "$tools_repo" ] || tools_repo="busybox"
+  [ -n "$tools_tag" ] || tools_tag="1.37.0"
+
+  local prefix=""
+  [ -n "$m_registry" ] && prefix="$(printf '%s' "$m_registry" | sed 's:/*$::')/"
+  m_source_image="${prefix}${minio_repo}:${minio_tag}"
+  m_image="${prefix}${tools_repo}:${tools_tag}"
 }
 
 # Emit the shell that keeps a bucket out of the loop. An allow list skips
@@ -925,6 +970,25 @@ spec:
         kubeaihub.io/minio-operation: ${direction}
     spec:
       restartPolicy: OnFailure
+      volumes:
+        - name: scripts
+          configMap:
+            name: ${job_name}
+            defaultMode: 0755
+        - name: tools
+          emptyDir: {}
+${backup_volume}
+      # The script needs awk, sed and grep, which the MinIO server image does not
+      # ship. mc is copied out of that image and the script runs in busybox, so
+      # only images already used elsewhere in the cluster are required.
+      initContainers:
+        - name: install-mc
+          image: ${m_source_image}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c", "cp /usr/bin/mc /tools/mc && chmod 0755 /tools/mc"]
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
       containers:
         - name: mc
           image: ${m_image}
@@ -943,19 +1007,21 @@ spec:
               value: "${m_remove}"
             - name: MIRROR_VERSIONS
               value: "${m_versions}"
+            - name: PATH
+              value: "/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            - name: HOME
+              value: /tmp
+            - name: MC_CONFIG_DIR
+              value: /tmp/.mc
           envFrom:
             - secretRef:
                 name: ${job_name}
           volumeMounts:
             - name: scripts
               mountPath: /scripts
+            - name: tools
+              mountPath: /tools
 ${backup_mount}
-      volumes:
-        - name: scripts
-          configMap:
-            name: ${job_name}
-            defaultMode: 0755
-${backup_volume}
 EOF
 }
 
@@ -963,9 +1029,8 @@ run_mirror_job() {
   local direction="$1" verb="$2"
 
   local script_file manifest_file
-  script_file=$(mktemp)
-  manifest_file=$(mktemp)
-  trap 'rm -f "$script_file" "$manifest_file"' RETURN
+  script_file="$(new_work_file mirror.sh)"
+  manifest_file="$(new_work_file manifest.yaml)"
 
   write_mirror_script "$script_file" "$direction"
 

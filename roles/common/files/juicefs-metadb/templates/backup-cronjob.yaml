@@ -122,9 +122,11 @@ spec:
               configMap:
                 name: {{ include "juicefs-metadb.fullname" . }}-backup
                 defaultMode: 0755
+            - name: tools
+              emptyDir: {}
           initContainers:
             - name: pg-dump
-              image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag }}
+              image: {{ include "juicefs-metadb.imageRef" (dict "ctx" . "image" .Values.image) }}
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               command:
                 - sh
@@ -141,9 +143,19 @@ spec:
               volumeMounts:
                 - name: dump
                   mountPath: /dump
+            # The upload container runs in busybox, which has no S3 client, so mc
+            # is copied out of the MinIO image here rather than adding a second
+            # registry dependency.
+            - name: install-mc
+              image: {{ include "juicefs-metadb.imageRef" (dict "ctx" . "image" .Values.backup.mcImage) }}
+              imagePullPolicy: {{ .Values.backup.mcImage.pullPolicy }}
+              command: ["/bin/sh", "-c", "cp /usr/bin/mc /tools/mc && chmod 0755 /tools/mc"]
+              volumeMounts:
+                - name: tools
+                  mountPath: /tools
           containers:
             - name: upload
-              image: {{ printf "%s:%s" .Values.backup.image.repository .Values.backup.image.tag }}
+              image: {{ include "juicefs-metadb.imageRef" (dict "ctx" . "image" .Values.backup.image) }}
               imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
               command: ["/bin/sh", "/scripts/upload.sh"]
               env:
@@ -153,6 +165,12 @@ spec:
                   value: {{ .Values.backup.s3.secure | quote }}
                 - name: BACKUP_KEEP
                   value: {{ .Values.backup.keep | quote }}
+                - name: PATH
+                  value: "/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                - name: HOME
+                  value: /tmp
+                - name: MC_CONFIG_DIR
+                  value: /tmp/.mc
               envFrom:
                 - secretRef:
                     name: {{ include "juicefs-metadb.backupSecretName" . }}
@@ -161,4 +179,6 @@ spec:
                   mountPath: /dump
                 - name: scripts
                   mountPath: /scripts
+                - name: tools
+                  mountPath: /tools
 {{- end }}

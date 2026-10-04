@@ -30,6 +30,22 @@ Create chart name and version as used by the chart label.
 {{- end -}}
 
 {{/*
+Fully qualified image reference for an image block from values.yaml, honoring the
+optional per-image registry prefix.
+
+Usage: {{ include "minio.imageRef" (dict "image" .Values.image) }}
+*/}}
+{{- define "minio.imageRef" -}}
+{{- $img := .image -}}
+{{- $reg := $img.registry | default "" | trimSuffix "/" -}}
+{{- if $reg -}}
+{{- printf "%s/%s:%s" $reg $img.repository $img.tag -}}
+{{- else -}}
+{{- printf "%s:%s" $img.repository $img.tag -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Name of the headless Service that gives every server a stable DNS name.
 Distributed MinIO builds its server list from these names.
 */}}

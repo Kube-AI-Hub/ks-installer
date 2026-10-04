@@ -11,6 +11,9 @@
 {% set jf_metadb = jf.get('metadb', {}) %}
 {% set jf_backup = jf_metadb.get('backup', {}) %}
 
+# One registry prefix for the database, pg_dump and mc images below.
+imageRegistry: {{ jf.get('imageRegistry', '') }}
+
 auth:
   username: {{ jf_metadb.get('username', 'juicefs') }}
   password: {{ juicefs_metadb_password }}

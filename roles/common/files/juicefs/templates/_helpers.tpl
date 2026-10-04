@@ -55,6 +55,29 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/*
+Fully qualified image reference for an image block from values.yaml.
+
+A per-image `registry` wins; otherwise the chart-level `imageRegistry` applies.
+That lets a site set one prefix for everything and still override a single image
+that lives somewhere else.
+
+Usage: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.image) }}
+*/}}
+{{- define "juicefs.imageRef" -}}
+{{- $img := .image -}}
+{{- $reg := $img.registry | default "" -}}
+{{- if not $reg -}}
+{{- $reg = .ctx.Values.imageRegistry | default "" -}}
+{{- end -}}
+{{- $reg = $reg | trimSuffix "/" -}}
+{{- if $reg -}}
+{{- printf "%s/%s:%s" $reg $img.repository $img.tag -}}
+{{- else -}}
+{{- printf "%s:%s" $img.repository $img.tag -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Validate the volume credentials.
 
 A StorageClass whose Secret is missing a field fails at the first PVC, with an

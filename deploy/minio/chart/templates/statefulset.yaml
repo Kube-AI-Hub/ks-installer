@@ -61,7 +61,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag }}
+          image: {{ include "minio.imageRef" (dict "image" .Values.image) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
             - /bin/sh

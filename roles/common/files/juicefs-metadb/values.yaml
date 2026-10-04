@@ -19,6 +19,10 @@
 ## the driver's `metaurl`.
 fullnameOverride: juicefs-metadb
 
+## Registry prefix applied to every image below, for example
+## dockerhub.kubekey.local/kube-ai-hub. A per-image `registry` overrides it.
+imageRegistry: ""
+
 image:
   repository: opencsghq/postgres
   tag: "15.19"
@@ -90,8 +94,18 @@ backup:
   ## Keep this many dated directories; older ones are pruned after each dump.
   keep: 14
   image:
-    repository: minio/mc
-    tag: RELEASE.2025-08-13T08-35-41Z
+    ## The upload script needs a shell with awk, sed and grep.
+    registry: ""
+    repository: busybox
+    tag: "1.37.0"
+    pullPolicy: IfNotPresent
+  ## Image that carries the `mc` binary. The upload container copies it out of
+  ## this image in an init container, because the separate minio/mc image is not
+  ## published on every registry this runs against.
+  mcImage:
+    registry: ""
+    repository: minio/minio
+    tag: RELEASE.2025-09-07T16-13-09Z
     pullPolicy: IfNotPresent
   ## Object store the dumps are written to. Required when enabled; there is no
   ## default because there is no built-in object store any more.

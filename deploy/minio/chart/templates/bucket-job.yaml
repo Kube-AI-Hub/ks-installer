@@ -92,9 +92,21 @@ spec:
                   name: {{ include "minio.fullname" . }}-make-bucket
               - secret:
                   name: {{ include "minio.secretName" . }}
+        - name: tools
+          emptyDir: {}
+      # The script needs awk/sed/grep, which the MinIO server image does not have,
+      # so mc is copied out of it and the script runs in busybox.
+      initContainers:
+        - name: install-mc
+          image: {{ include "minio.imageRef" (dict "image" .Values.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-c", "cp /usr/bin/mc /tools/mc && chmod 0755 /tools/mc"]
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
       containers:
         - name: minio-mc
-          image: {{ printf "%s:%s" .Values.mcImage.repository .Values.mcImage.tag }}
+          image: {{ include "minio.imageRef" (dict "image" .Values.mcImage) }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           command: ["/bin/sh", "/config/initialize"]
           env:
@@ -102,7 +114,15 @@ spec:
               value: {{ include "minio.fullname" . }}
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
+            - name: PATH
+              value: "/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            - name: HOME
+              value: /tmp
+            - name: MC_CONFIG_DIR
+              value: /tmp/.mc
           volumeMounts:
             - name: minio-configuration
               mountPath: /config
+            - name: tools
+              mountPath: /tools
 {{- end }}

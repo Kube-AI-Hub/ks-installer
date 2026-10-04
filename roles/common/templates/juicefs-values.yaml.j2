@@ -15,6 +15,10 @@
 {% set jf_metadb = jf.get('metadb', {}) %}
 {% set jf_sc = jf.get('storageClass', 'juicefs-shared') %}
 
+# One registry prefix for every image below; a site that mirrors images keeps its
+# layout unchanged. See common.juicefs.imageRegistry.
+imageRegistry: {{ jf.get('imageRegistry', '') }}
+
 image:
   repository: {{ jf_image.get('repository', 'juicedata/juicefs-csi-driver') }}
   tag: "{{ jf_image.get('tag', 'v0.27.0') }}"

@@ -74,6 +74,27 @@ juicefs accepts postgres:// URLs as `metaurl`.
 {{- end -}}
 
 {{/*
+Fully qualified image reference for an image block from values.yaml.
+
+A per-image `registry` wins; otherwise the chart-level `imageRegistry` applies.
+
+Usage: {{ include "juicefs-metadb.imageRef" (dict "ctx" . "image" .Values.image) }}
+*/}}
+{{- define "juicefs-metadb.imageRef" -}}
+{{- $img := .image -}}
+{{- $reg := $img.registry | default "" -}}
+{{- if not $reg -}}
+{{- $reg = .ctx.Values.imageRegistry | default "" -}}
+{{- end -}}
+{{- $reg = $reg | trimSuffix "/" -}}
+{{- if $reg -}}
+{{- printf "%s/%s:%s" $reg $img.repository $img.tag -}}
+{{- else -}}
+{{- printf "%s:%s" $img.repository $img.tag -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Refuse a JuiceFS StorageClass for the metadata volume.
 
 The CSI driver cannot mount a volume until it can read the metadata database, so
