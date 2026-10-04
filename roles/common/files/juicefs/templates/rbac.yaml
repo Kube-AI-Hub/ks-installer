@@ -60,7 +60,9 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "watch", "create", "delete", "update"]
+    # patch matters: the driver annotates the workload pod when a volume is
+    # mounted, and without it every NodePublishVolume fails with a 403.
+    verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
   - apiGroups: [""]
     resources: ["pods/exec"]
     verbs: ["create"]
@@ -125,7 +127,9 @@ rules:
     verbs: ["list", "watch", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "watch", "create", "delete", "update"]
+    # patch matters: the driver annotates the workload pod when a volume is
+    # mounted, and without it every NodePublishVolume fails with a 403.
+    verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]
