@@ -169,7 +169,7 @@ kube_rbac_proxy_tag: v0.14.0
 kube_state_metrics_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/kube-state-metrics"
 kube_state_metrics_tag: v2.10.1
 node_exporter_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/prom/node-exporter"
-node_exporter_tag: v1.3.1
+node_exporter_tag: v1.12.1
 alertmanager_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/prom/alertmanager"
 alertmanager_tag: v0.23.0
 thanos_repo: "{{ base_repo }}{{ namespace_override | default('kube-ai-hub') }}/thanosio/thanos"
