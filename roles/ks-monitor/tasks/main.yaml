@@ -18,6 +18,14 @@
     - monitoring.gpu is defined
     - monitoring.gpu.enabled | default(false) | bool
 
+# InfiniBand rules follow the same pattern as the GPU rules: they must not wait
+# on status.monitoring, and the metrics come from node-exporter rather than a
+# dedicated exporter.
+- import_tasks: ib-monitoring.yaml
+  when:
+    - monitoring.ib is defined
+    - monitoring.ib.enabled | default(false) | bool
+
 - import_tasks: csghub-monitoring.yaml
   when:
     - "common.monitoring.type is not defined or common.monitoring.type != 'external'"

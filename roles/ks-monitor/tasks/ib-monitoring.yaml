@@ -1,0 +1,14 @@
+- name: Monitoring | Getting InfiniBand monitoring installation files
+  copy:
+    src: "{{ item }}"
+    dest: "{{ kubesphere_dir }}/"
+  loop:
+    - "prometheus/ib"
+  when: monitoring.ib is defined and monitoring.ib.enabled | default(false) | bool
+
+# InfiniBand / RDMA monitoring. The metrics come from the stock node-exporter
+# infiniband collector (v1.12.1+); there is no separate exporter to install.
+- name: Monitoring | Installing InfiniBand PrometheusRule
+  shell: >
+    {{ bin_dir }}/kubectl apply -f {{ kubesphere_dir }}/prometheus/ib --force
+  when: monitoring.ib is defined and monitoring.ib.enabled | default(false) | bool
