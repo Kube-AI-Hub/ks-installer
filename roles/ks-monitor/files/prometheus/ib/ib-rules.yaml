@@ -12,17 +12,21 @@ metadata:
   namespace: kubesphere-monitoring-system
 spec:
   groups:
-  # InfiniBand / RDMA aggregation. The raw node_infiniband_* series are per
-  # (node, device, port) and there are ~50 of them, so all rate windows and
-  # cross-device rollups live here and the UI only reads the node:ib_* names.
+  # InfiniBand / RDMA aggregation.
   #
-  # Only Mellanox HCAs are meaningful for RDMA inference: the nodes also expose
-  # Broadcom bnxt_re devices, which have no RDMA counters populated and would
-  # otherwise dilute the health ratio.
+  # The node_infiniband_* family is per (node, device, port). It is the one
+  # node-exporter family that does not ship a node label natively, so the
+  # node-exporter ServiceMonitor copies the node name into one for these series
+  # (see node-exporter-serviceMonitor.yaml). Everything below can therefore
+  # group by (node) directly.
+  #
+  # Rules are scoped to Mellanox devices: the nodes also expose Broadcom bnxt_re
+  # NICs whose RDMA counters stay empty, and including them would dilute the
+  # port-health ratio and add ~200 permanently-zero series.
   - name: cluster-ib.rules
     interval: 1m
     rules:
-    # Port health, counted per node over the Mellanox devices only.
+    # Port health. A port is "up" when its logical state is Active (4).
     - record: node:ib_port_up:count
       expr: |
         count by (node) (node_infiniband_state_id{device=~"mlx5_.*"} == 4)
@@ -33,8 +37,8 @@ spec:
       expr: |
         node:ib_port_up:count / node:ib_port_total:count
 
-    # Throughput. port_data_* is a 4-byte-word counter in older versions but is
-    # already byte-denominated from v1.10, so a plain rate is correct.
+    # Throughput. port_data_* is byte-denominated from node-exporter v1.10 on,
+    # so a plain rate is correct.
     - record: node:ib_rx_bytes:rate
       expr: |
         sum by (node, device, port) (rate(node_infiniband_port_data_received_bytes_total{device=~"mlx5_.*"}[5m]))
@@ -78,43 +82,31 @@ spec:
 
     # Node-level rollups for the node pages.
     - record: node:ib_rx_bytes:sum
-      expr: |
-        sum by (node) (node:ib_rx_bytes:rate)
+      expr: sum by (node) (node:ib_rx_bytes:rate)
     - record: node:ib_tx_bytes:sum
-      expr: |
-        sum by (node) (node:ib_tx_bytes:rate)
+      expr: sum by (node) (node:ib_tx_bytes:rate)
     - record: node:ib_rx_errors:sum
-      expr: |
-        sum by (node) (node:ib_rx_errors:rate)
+      expr: sum by (node) (node:ib_rx_errors:rate)
     - record: node:ib_link_downed:sum
-      expr: |
-        sum by (node) (node:ib_link_downed:rate)
+      expr: sum by (node) (node:ib_link_downed:rate)
     - record: node:ib_retrans:sum
-      expr: |
-        sum by (node) (node:ib_retrans:rate)
+      expr: sum by (node) (node:ib_retrans:rate)
     - record: node:ib_link_speed:sum
       expr: |
         sum by (node) (node_infiniband_rate_bytes_per_second{device=~"mlx5_.*"})
 
     # Cluster rollups for the overview card.
     - record: cluster:ib_rx_bytes:sum
-      expr: |
-        sum(node:ib_rx_bytes:rate)
+      expr: sum(node:ib_rx_bytes:rate)
     - record: cluster:ib_tx_bytes:sum
-      expr: |
-        sum(node:ib_tx_bytes:rate)
+      expr: sum(node:ib_tx_bytes:rate)
     - record: cluster:ib_port_up:count
-      expr: |
-        sum(node:ib_port_up:count)
+      expr: sum(node:ib_port_up:count)
     - record: cluster:ib_port_total:count
-      expr: |
-        sum(node:ib_port_total:count)
+      expr: sum(node:ib_port_total:count)
     - record: cluster:ib_health:ratio
-      expr: |
-        sum(node:ib_port_up:count) / sum(node:ib_port_total:count)
+      expr: sum(node:ib_port_up:count) / sum(node:ib_port_total:count)
     - record: cluster:ib_rx_errors:sum
-      expr: |
-        sum(node:ib_rx_errors:rate)
+      expr: sum(node:ib_rx_errors:rate)
     - record: cluster:ib_retrans:sum
-      expr: |
-        sum(node:ib_retrans:rate)
+      expr: sum(node:ib_retrans:rate)

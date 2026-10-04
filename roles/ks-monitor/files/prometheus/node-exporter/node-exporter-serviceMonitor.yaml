@@ -33,6 +33,16 @@ spec:
       sourceLabels:
       - __meta_kubernetes_pod_node_name
       targetLabel: instance
+    # The InfiniBand collector is the only one that does not carry a node label,
+    # and kube-server selects node metrics by `node`. Copy it across for those
+    # series so the RDMA ports API and the node dashboards can select them the
+    # same way as every other node metric.
+    - action: replace
+      regex: (.*)
+      replacement: $1
+      sourceLabels:
+      - __meta_kubernetes_pod_node_name
+      targetLabel: node
     - action: labeldrop
       regex: (service|endpoint|container)
     scheme: https
