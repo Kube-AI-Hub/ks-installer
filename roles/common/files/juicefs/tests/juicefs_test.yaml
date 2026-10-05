@@ -100,6 +100,72 @@ tests:
           path: metadata.name
           value: juicefs-shared-team
 
+  ## ------------------------------------------------------------------
+  ## Node local block cache
+  ## ------------------------------------------------------------------
+  - it: configures the node local block cache on the StorageClass
+    template: secret.yaml
+    documentIndex: 1
+    asserts:
+      # These land in every dynamically provisioned PV, and the driver reads them
+      # back from there when it builds the mount pod.
+      - contains:
+          path: mountOptions
+          content: "cache-dir=/data/juicefs-cache"
+      - contains:
+          path: mountOptions
+          content: "free-space-ratio=0.1"
+      - contains:
+          path: mountOptions
+          content: "cache-eviction=2-random"
+
+  - it: moves the cache directory with the value, so a site can pick another disk
+    template: secret.yaml
+    documentIndex: 1
+    set:
+      node.cacheDir: /data1/juicefs-cache
+    asserts:
+      - contains:
+          path: mountOptions
+          content: "cache-dir=/data1/juicefs-cache"
+
+  - it: omits cache-size by default so the JuiceFS default applies
+    template: secret.yaml
+    documentIndex: 1
+    asserts:
+      # cache-size=0 would disable the disk cache entirely, so an unset value must
+      # render nothing at all rather than a zero.
+      - notContains:
+          path: mountOptions
+          content: "cache-size=0"
+      - notContains:
+          path: mountOptions
+          content: "cache-size=100G"
+
+  - it: honours an explicit cache-size
+    template: secret.yaml
+    documentIndex: 1
+    set:
+      node.cacheSize: 500G
+    asserts:
+      - contains:
+          path: mountOptions
+          content: "cache-size=500G"
+
+  - it: shares one mount pod per node so the block cache is shared too
+    template: node-daemonset.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name=="STORAGE_CLASS_SHARE_MOUNT")].value
+          value: "true"
+
+  - it: passes the share switch to the controller, which reconciles mount pods
+    template: controller-statefulset.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name=="STORAGE_CLASS_SHARE_MOUNT")].value
+          value: "true"
+
   - it: refuses a StorageClass name that would not select ReadWriteMany
     template: secret.yaml
     set:

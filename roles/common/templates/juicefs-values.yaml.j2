@@ -60,8 +60,16 @@ volume:
 
 node:
   kubeletDir: {{ jf.get('kubeletDir', '/var/lib/kubelet') }}
-  cacheDir: {{ jf.get('cacheDir', '/var/lib/juicefs') }}
   updateConfDir: {{ jf.get('updateConfDir', '/etc/juicefs') }}
+  {%- set jf_node = jf.get('node', {}) %}
+  # Node local block cache. Models are written once and read back by every
+  # replica started on the node, so this is what turns a repeated start into a
+  # local read. Point it at the disk with room: on a site whose data disk is not
+  # /data, set common.juicefs.node.cacheDir.
+  cacheDir: {{ jf_node.get('cacheDir', '/data/juicefs-cache') }}
+  cacheSize: "{{ jf_node.get('cacheSize', '') }}"
+  freeSpaceRatio: "{{ jf_node.get('freeSpaceRatio', '0.1') }}"
+  cacheEviction: {{ jf_node.get('cacheEviction', '2-random') }}
 
 driverOptions:
   logLevel: {{ jf.get('logLevel', 5) }}

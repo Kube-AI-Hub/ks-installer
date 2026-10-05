@@ -60,6 +60,19 @@ spec:
       storageClass: juicefs-shared
       bucket: jfs
       volumeName: kubeaihub
+      # Node local block cache. Models are written once and read back by every
+      # replica started on the node, so this is what makes a repeated start a
+      # local read instead of a pull from MinIO.
+      #
+      # Point it at the disk with room: B200 keeps /data (3.5T, over half used)
+      # for images and puts the big RAID0 at /data1 (25T). Both nodes use /data1.
+      node:
+        cacheDir: /data1/juicefs-cache
+        # Empty keeps the JuiceFS default of 100G. Do not set 0: that disables
+        # the disk cache instead of making it unlimited.
+        cacheSize: ""
+        # The real guard against filling the disk.
+        freeSpaceRatio: "0.1"
       metadb:
         storageClass: local-static
         size: 20Gi

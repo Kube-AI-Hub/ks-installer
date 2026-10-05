@@ -95,6 +95,31 @@ node:
   ## kubelet's read-only API port, used by the driver to talk to kubelet.
   kubeletPort: 10250
 
+  ## Block cache on the node's local disk.
+  ##
+  ## A model file is written once and then read back by every replica started on
+  ## that node, so keeping the blocks locally turns a repeated start into a local
+  ## read instead of a pull from MinIO. JuiceFS does this caching itself; this
+  ## chart only has to say where and how much.
+  ##
+  ## cacheDir lands in the StorageClass mountOptions and from there in each
+  ## volume's PV, where the driver mounts it into the mount pod as a hostPath. It
+  ## must therefore exist on every node that can run a workload. The driver
+  ## creates it, but it cannot create the filesystem: point this at the disk with
+  ## room, not at the root disk.
+  cacheDir: /data/juicefs-cache
+  ## Upper bound on cached blocks. Empty keeps the JuiceFS default of 100G.
+  ##
+  ## Do not set 0: JuiceFS reads that as "no disk cache at all" and falls back to
+  ## memory, which is the opposite of what is wanted here.
+  cacheSize: ""
+  ## Stop caching once the filesystem holding cacheDir is this full. This, not
+  ## cacheSize, is what keeps a shared node from filling its disk.
+  freeSpaceRatio: "0.1"
+  ## Eviction policy. Model blocks are written once and never modified, so a
+  ## random pick costs nothing and avoids the recency bookkeeping.
+  cacheEviction: "2-random"
+
 ## The StorageClass every business PVC and the model cache use.
 storageClass:
   ## Must contain "shared" so csghub-server selects ReadWriteMany.

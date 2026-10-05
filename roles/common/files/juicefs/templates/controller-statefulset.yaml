@@ -83,6 +83,10 @@ spec:
               value: {{ .Values.node.configPath | quote }}
             - name: JUICEFS_MOUNT_IMAGE
               value: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.mountImage) | quote }}
+            # The controller builds and reconciles the mount pods, so it needs
+            # the same switch as the node plugin. See the node DaemonSet.
+            - name: STORAGE_CLASS_SHARE_MOUNT
+              value: "true"
           securityContext:
             privileged: true
           volumeMounts:

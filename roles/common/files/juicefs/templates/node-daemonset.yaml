@@ -95,6 +95,16 @@ spec:
               value: {{ .Values.node.configPath | quote }}
             - name: JUICEFS_MOUNT_IMAGE
               value: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.mountImage) | quote }}
+            # One mount pod per node instead of one per volume. The driver then
+            # keys the mount by StorageClass name, so every volume from this
+            # class shares a single juicefs client and, more importantly, a
+            # single block cache: a model downloaded for one deploy is already
+            # on disk for the next one on the same node.
+            #
+            # The StorageClass must not use templated secret names for this to be
+            # accepted; ours are plain names.
+            - name: STORAGE_CLASS_SHARE_MOUNT
+              value: "true"
           securityContext:
             privileged: true
           resources:
