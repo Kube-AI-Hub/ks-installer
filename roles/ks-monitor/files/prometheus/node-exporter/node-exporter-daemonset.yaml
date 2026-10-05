@@ -41,6 +41,10 @@ spec:
         - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/k3s/containerd/.+|var/lib/docker/.+|var/lib/kubelet/pods/.+)($|/)
         - --collector.netclass.ignored-devices=^(veth.*|[a-f0-9]{15})$
         - --collector.netdev.device-exclude=^(veth.*|[a-f0-9]{15})$
+        # The infiniband collector does not expose /ports/<n>/link_layer, so the
+        # RDMA port list cannot tell InfiniBand from RoCE. The sidecar below writes
+        # it as a textfile metric.
+        - --collector.textfile.directory=/host/textfile
         image: prom/node-exporter:v1.12.1
         name: node-exporter
         resources:
@@ -59,6 +63,61 @@ spec:
           mountPropagation: HostToContainer
           name: root
           readOnly: true
+        - mountPath: /host/textfile
+          name: textfile
+      # Publishes node_rdma_link_layer from /sys/class/infiniband/<dev>/ports/<port>/link_layer.
+      # A shell loop is used instead of a small Go program because it avoids shipping
+      # and maintaining another image; the write is atomic so node-exporter never
+      # reads a half-written file.
+      - args:
+        - |
+          set -eu
+          OUT=/host/textfile/rdma_link_layer.prom
+          TMP=/host/textfile/.rdma_link_layer.prom.$$
+          while true; do
+            {
+              echo '# HELP node_rdma_link_layer InfiniBand port link layer (1=InfiniBand, 2=Ethernet/RoCE, 0=unknown).'
+              echo '# TYPE node_rdma_link_layer gauge'
+              for d in /host/sys/class/infiniband/*/ports/*; do
+                [ -d "$d" ] || continue
+                dev=$(basename "$(dirname "$(dirname "$d")")")
+                port=$(basename "$d")
+                ll=$(cat "$d/link_layer" 2>/dev/null || echo "")
+                case "$ll" in
+                  InfiniBand) v=1 ;;
+                  Ethernet)   v=2 ;;
+                  *)          v=0 ;;
+                esac
+                echo "node_rdma_link_layer{device=\"$dev\",port=\"$port\"} $v"
+              done
+            } > "$TMP"
+            mv "$TMP" "$OUT"
+            sleep 30
+          done
+        command:
+        - /bin/sh
+        - -c
+        image: kube-ai-hub/busybox:latest
+        name: rdma-link-layer
+        resources:
+          limits:
+            cpu: 10m
+            memory: 32Mi
+          requests:
+            cpu: 5m
+            memory: 16Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /host/sys
+          mountPropagation: HostToContainer
+          name: sys
+          readOnly: true
+        - mountPath: /host/textfile
+          name: textfile
       - args:
         - --logtostderr
         - --secure-listen-address=[$(IP)]:9100
@@ -103,5 +162,12 @@ spec:
       - hostPath:
           path: /
         name: root
+      # Shared between the textfile writer and node-exporter. hostPath rather than
+      # emptyDir because node-exporter and the writer are both local to the node,
+      # and it keeps the last written file visible for debugging.
+      - hostPath:
+          path: /var/lib/node-exporter/textfile
+          type: DirectoryOrCreate
+        name: textfile
   updateStrategy:
     type: OnDelete
