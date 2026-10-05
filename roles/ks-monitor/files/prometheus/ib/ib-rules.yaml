@@ -12,7 +12,7 @@ metadata:
   namespace: kubesphere-monitoring-system
 spec:
   groups:
-  # InfiniBand / RDMA aggregation.
+  # RDMA aggregation.
   #
   # The node_infiniband_* family is per (node, device, port). It is the one
   # node-exporter family that does not ship a node label natively, so the
@@ -20,65 +20,72 @@ spec:
   # (see node-exporter-serviceMonitor.yaml). Everything below can therefore
   # group by (node) directly.
   #
-  # Rules are scoped to Mellanox devices: the nodes also expose Broadcom bnxt_re
-  # NICs whose RDMA counters stay empty, and including them would dilute the
-  # port-health ratio and add ~200 permanently-zero series.
+  # Scope: every device under /sys/class/infiniband, so both the Mellanox
+  # InfiniBand HCAs and the Broadcom bnxt_re RoCE NICs are counted. This keeps
+  # the port counts here consistent with the RDMA port list in the console,
+  # which lists both. Two consequences worth knowing:
+  #   * the throughput/error rules only ever have data for InfiniBand, because
+  #     bnxt_re exposes no counters/ directory (it has hw_counters, which
+  #     node-exporter does not collect). Those series are simply absent for
+  #     RoCE rather than zero.
+  #   * the port-health ratio counts RoCE ports too, and those NICs are often
+  #     deliberately down, so a cluster can read below 100% for that reason.
   - name: cluster-ib.rules
     interval: 1m
     rules:
     # Port health. A port is "up" when its logical state is Active (4).
     - record: node:ib_port_up:count
       expr: |
-        count by (node) (node_infiniband_state_id{device=~"mlx5_.*"} == 4)
+        count by (node) (node_infiniband_state_id == 4)
     - record: node:ib_port_total:count
       expr: |
-        count by (node) (node_infiniband_state_id{device=~"mlx5_.*"})
+        count by (node) (node_infiniband_state_id)
     - record: node:ib_health:ratio
       expr: |
         node:ib_port_up:count / node:ib_port_total:count
 
     # Throughput. port_data_* is byte-denominated from node-exporter v1.10 on,
-    # so a plain rate is correct.
+    # so a plain rate is correct. InfiniBand only, see the note above.
     - record: node:ib_rx_bytes:rate
       expr: |
-        sum by (node, device, port) (rate(node_infiniband_port_data_received_bytes_total{device=~"mlx5_.*"}[5m]))
+        sum by (node, device, port) (rate(node_infiniband_port_data_received_bytes_total[5m]))
     - record: node:ib_tx_bytes:rate
       expr: |
-        sum by (node, device, port) (rate(node_infiniband_port_data_transmitted_bytes_total{device=~"mlx5_.*"}[5m]))
+        sum by (node, device, port) (rate(node_infiniband_port_data_transmitted_bytes_total[5m]))
 
     # Errors and link health. link_error_recovery is included because a rising
     # rate there means the link is flapping even when it never fully went down.
     - record: node:ib_rx_errors:rate
       expr: |
         sum by (node, device, port) (
-          rate(node_infiniband_symbol_error_total{device=~"mlx5_.*"}[5m])
-          + rate(node_infiniband_port_errors_received_total{device=~"mlx5_.*"}[5m])
-          + rate(node_infiniband_local_link_integrity_errors_total{device=~"mlx5_.*"}[5m])
-          + rate(node_infiniband_link_error_recovery_total{device=~"mlx5_.*"}[5m])
+          rate(node_infiniband_symbol_error_total[5m])
+          + rate(node_infiniband_port_errors_received_total[5m])
+          + rate(node_infiniband_local_link_integrity_errors_total[5m])
+          + rate(node_infiniband_link_error_recovery_total[5m])
         )
     - record: node:ib_link_downed:rate
       expr: |
-        sum by (node, device, port) (rate(node_infiniband_link_downed_total{device=~"mlx5_.*"}[5m]))
+        sum by (node, device, port) (rate(node_infiniband_link_downed_total[5m]))
     - record: node:ib_discards:rate
       expr: |
-        sum by (node, device, port) (rate(node_infiniband_port_discards_transmitted_total{device=~"mlx5_.*"}[5m]))
+        sum by (node, device, port) (rate(node_infiniband_port_discards_transmitted_total[5m]))
     - record: node:ib_vl15_dropped:rate
       expr: |
-        sum by (node, device, port) (rate(node_infiniband_vl15_dropped_total{device=~"mlx5_.*"}[5m]))
+        sum by (node, device, port) (rate(node_infiniband_vl15_dropped_total[5m]))
     - record: node:ib_transmit_wait:rate
       expr: |
-        sum by (node, device, port) (rate(node_infiniband_port_transmit_wait_total{device=~"mlx5_.*"}[5m]))
+        sum by (node, device, port) (rate(node_infiniband_port_transmit_wait_total[5m]))
 
     # Congestion signals: retransmits, out-of-sequence, DCQCN slow restart.
     - record: node:ib_retrans:rate
       expr: |
-        sum by (node, device, port) (rate(node_infiniband_roce_adp_retransmits_total{device=~"mlx5_.*"}[5m]))
+        sum by (node, device, port) (rate(node_infiniband_roce_adp_retransmits_total[5m]))
     - record: node:ib_out_of_sequence:rate
       expr: |
-        sum by (node, device, port) (rate(node_infiniband_out_of_sequence_packets_received_total{device=~"mlx5_.*"}[5m]))
+        sum by (node, device, port) (rate(node_infiniband_out_of_sequence_packets_received_total[5m]))
     - record: node:ib_slow_restart:rate
       expr: |
-        sum by (node, device, port) (rate(node_infiniband_roce_slow_restart_total{device=~"mlx5_.*"}[5m]))
+        sum by (node, device, port) (rate(node_infiniband_roce_slow_restart_total[5m]))
 
     # Node-level rollups for the node pages.
     - record: node:ib_rx_bytes:sum
@@ -91,9 +98,10 @@ spec:
       expr: sum by (node) (node:ib_link_downed:rate)
     - record: node:ib_retrans:sum
       expr: sum by (node) (node:ib_retrans:rate)
+    # Link rate is reported by both fabrics, so this one does include RoCE.
     - record: node:ib_link_speed:sum
       expr: |
-        sum by (node) (node_infiniband_rate_bytes_per_second{device=~"mlx5_.*"})
+        sum by (node) (node_infiniband_rate_bytes_per_second)
 
     # Cluster rollups for the overview card.
     - record: cluster:ib_rx_bytes:sum
