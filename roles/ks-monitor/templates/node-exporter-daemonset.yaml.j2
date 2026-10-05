@@ -71,11 +71,15 @@ spec:
       # A shell loop is used instead of a small Go program because it avoids shipping
       # and maintaining another image; the write is atomic so node-exporter never
       # reads a half-written file.
+      #
+      # The textfile directory is an emptyDir shared with node-exporter rather than
+      # a hostPath: the pod runs as nobody (65534), so it cannot write a root-owned
+      # host directory, and the file only needs to live as long as the pod.
       - args:
         - |
           set -eu
           OUT=/host/textfile/rdma_link_layer.prom
-          TMP=/host/textfile/.rdma_link_layer.prom.$$
+          TMP=/host/textfile/rdma_link_layer.prom.tmp
           while true; do
             {
               echo '# HELP node_rdma_link_layer InfiniBand port link layer (1=InfiniBand, 2=Ethernet/RoCE, 0=unknown).'
@@ -167,10 +171,8 @@ spec:
       - hostPath:
           path: /
         name: root
-      # Shared between the textfile writer and node-exporter. hostPath rather than
-      # emptyDir because node-exporter and the writer are both local to the node,
-      # and it keeps the last written file visible for debugging.
-      - hostPath:
-          path: /var/lib/node-exporter/textfile
-          type: DirectoryOrCreate
+      # Shared between the textfile writer and node-exporter. emptyDir rather than
+      # hostPath: the pod runs as nobody (65534) and cannot write a root-owned host
+      # directory, and the file only needs to outlive the pod, not the node.
+      - emptyDir: {}
         name: textfile
