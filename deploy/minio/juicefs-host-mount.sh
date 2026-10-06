@@ -328,23 +328,23 @@ set -eu
 #
 # The client stays in the foreground by default, which is what keeps this
 # container alive and therefore the mount alive.
-set -- \
-  --storage="$STORAGE" \
-  --bucket="$BUCKET" \
-  --cache-dir="$CACHE_DIR" \
-  --free-space-ratio="$FREE_SPACE_RATIO" \
-  --cache-eviction="$CACHE_EVICTION" \
-  --metrics="$METRICS_ADDR" \
-  -o allow_other \
+set -- \\
+  --storage="\$STORAGE" \\
+  --bucket="\$BUCKET" \\
+  --cache-dir="\$CACHE_DIR" \\
+  --free-space-ratio="\$FREE_SPACE_RATIO" \\
+  --cache-eviction="\$CACHE_EVICTION" \\
+  --metrics="\$METRICS_ADDR" \\
+  -o allow_other \\
   --no-syslog
 
 # Empty means the whole filesystem was asked for, and the flag would reject an
 # empty value.
-if [ -n "$SUB_PATH" ]; then
-  set -- "$@" --subdir="$SUB_PATH"
+if [ -n "\$SUB_PATH" ]; then
+  set -- "\$@" --subdir="\$SUB_PATH"
 fi
 
-exec /usr/local/bin/juicefs mount "$METAURL" "$MOUNT_PATH" "$@"
+exec /usr/local/bin/juicefs mount "\$METAURL" "\$MOUNT_PATH" "\$@"
 '
 EOF
 }
