@@ -13,14 +13,23 @@
 # Run as root on every node that should see the files. The script is idempotent:
 # re-running it re-renders the configuration and restarts the unit.
 #
+# Why the mount runs in a container:
+#   - The juicefs client does not run on a bare host. It dlopens the client
+#     library of every metadata engine it was built with - FoundationDB, Ceph
+#     RADOS, GlusterFS - while starting up, even for a volume that uses none of
+#     them, so a copied-out binary exits immediately with a missing library.
+#     Installing that whole stack on the host to talk to PostgreSQL would be
+#     absurd, so the client runs from the image that already has it, which is
+#     exactly how the CSI driver runs its own mounts.
+#   - The FUSE mount is made inside that container on a shared bind mount, so the
+#     kernel propagates it back to the host and <mount-path> is a real mount for
+#     everyone on the node.
+#
 # Why the host can reach the volume at all:
-#   - JuiceFS needs the metadata database and the object store. This runs on a
-#     cluster node, where the Service ClusterIPs are routable, so both are
-#     addressed by IP. The node's resolver is systemd-resolved and does not
-#     resolve *.svc.cluster.local names, so names cannot be used.
-#   - The juicefs client is copied out of the mount image rather than installed
-#     from a package. So is libfdb_c.so: the client dlopens it while starting up
-#     even for a non-FoundationDB volume, so the binary alone does not run.
+#   - JuiceFS needs the metadata database and the object store. The container
+#     shares the host's network namespace, where the Service ClusterIPs are
+#     routable. Those are addressed by IP rather than by name because the node's
+#     resolver is systemd-resolved and does not resolve *.svc.cluster.local.
 #
 # Usage:
 #   juicefs-host-mount.sh [options]
@@ -34,14 +43,13 @@ DOCKER="${DOCKER:-docker}"
 
 CONFIG_DIR="/etc/juicefs"
 UNIT_NAME="juicefs-kubeaihub"
-# The client and the shared library it dlopens live together so uninstalling
-# removes both; a binary left behind without its library only fails later.
-BINARY_DIR="/usr/local/lib/${UNIT_NAME}"
-BINARY_PATH="${BINARY_DIR}/juicefs"
-LIBRARY_DIR="${BINARY_DIR}"
-LIBRARY_NAME="libfdb_c.so"
+# The mount container is named after the unit so a leftover from a hard reboot is
+# recognisable and can be replaced at the next start.
+CONTAINER_NAME="${UNIT_NAME}"
+ENV_FILE="${CONFIG_DIR}/${UNIT_NAME}.env"
 MOUNT_SCRIPT="/usr/local/bin/${UNIT_NAME}-mount"
-LOG_PATH="/var/log/${UNIT_NAME}.log"
+UNIT_FILE="/etc/systemd/system/${UNIT_NAME}.service"
+FUSE_CONF="/etc/fuse.conf"
 
 # Defaults are the ones the storage foundation installs, so a plain run on a
 # standard cluster needs no options at all. The credentials come from the
@@ -54,14 +62,12 @@ SECRET_NAME=""
 MOUNT_PATH="/data1/kube-ai-hub/models"
 CACHE_DIR="/data1/juicefs-cache"
 IMAGE=""
-FUSE_CONF="/etc/fuse.conf"
 
 FREE_SPACE_RATIO="0.1"
 CACHE_EVICTION="2-random"
 
 DRY_RUN="false"
 UNINSTALL="false"
-UPDATE_BINARY="false"
 NO_START="false"
 
 log()  { printf '%s\n' "$*"; }
@@ -88,17 +94,15 @@ Options:
                             StorageClass points at.
   --namespace <ns>          Namespace of the volume Secret, overriding the one
                             recorded on the StorageClass.
-  --image <img>             Image to take the juicefs client out of. Defaults to
-                            $JUICEFS_MOUNT_IMAGE, else the tag the chart ships.
+  --image <img>             Image holding the juicefs client. Defaults to
+                            $JUICEFS_MOUNT_IMAGE, else the image the CSI driver
+                            itself mounts with.
   --free-space-ratio <r>    Stop caching once the filesystem holding the cache
                             is this full (default 0.1).
   --cache-eviction <mode>   Cache eviction policy, none or 2-random
                             (default 2-random).
-  --fuse-conf <file>        Created with user_allow_other so users other than
-                            root can enter the mount (default /etc/fuse.conf).
-                            Pass "none" to leave it alone.
-  --update-binary           Re-copy the juicefs client even if one is already
-                            installed. Use after upgrading the CSI image.
+  --fuse-conf <file>        Where the mount records that non-root users may enter
+                            it (default /etc/fuse.conf). Created if missing.
   --no-start                Write the configuration but do not start the unit.
   --uninstall               Stop and remove the unit and its configuration. The
                             data in the volume is not touched, and neither is
@@ -109,6 +113,7 @@ Options:
 Notes:
   - Run as root: the mount is visible to the whole node and the unit is a system
     unit.
+  - Docker must be installed and running; the unit pulls in docker.service.
   - The node must be able to reach the metadata database and the object store.
     Both are resolved to ClusterIPs, so this only works on a cluster node.
   - Writing through this mount is possible. Prefer editing models while the
@@ -167,11 +172,12 @@ read_volume_secret() {
 
 # Replace the Service name in a URL with its ClusterIP.
 #
-# The node reaches cluster Services by address but cannot resolve their names:
-# its resolver is systemd-resolved, which knows nothing about cluster DNS. The
-# namespace comes from the URL itself when it is a fully qualified
-# "<service>.<namespace>.svc" name, so the metadata database and the object store
-# do not have to live in the same namespace as the Secret.
+# The container shares the host's network namespace, so it reaches cluster
+# Services by address but cannot resolve their names: the node's resolver is
+# systemd-resolved, which knows nothing about cluster DNS. The namespace comes
+# from the URL itself when it is a fully qualified "<service>.<namespace>.svc"
+# name, so the metadata database and the object store do not have to live in the
+# same namespace as the Secret.
 resolve_cluster_host() {
   local url="$1"
 
@@ -215,12 +221,12 @@ resolve_cluster_host() {
   printf '%s' "${url/"$host_port"/"${ip}${port}"}"
 }
 
-# The mount image ships the juicefs client; nothing else is needed from it.
+# The image holding the juicefs client.
 #
-# The image is whatever the CSI driver is configured to use, so read it from
-# there rather than hardcoding a tag that drifts from the deployment. There is no
-# fallback: an image that cannot be pulled would fail the mount with a confusing
-# error, so it is better to say so here.
+# The CSI driver is already configured with one, so read it from there rather
+# than hardcoding a tag that drifts from the deployment. There is no fallback: an
+# image that cannot be pulled would fail the mount with a confusing error, so it
+# is better to say so here.
 discover_image() {
   if [ -n "${JUICEFS_MOUNT_IMAGE:-}" ]; then
     printf '%s' "$JUICEFS_MOUNT_IMAGE"
@@ -245,23 +251,36 @@ render_mount_script() {
 #!/bin/sh
 # Copyright 2026 Kube AI Hub.
 #
-# Written by juicefs-host-mount.sh. Runs the JuiceFS client for the host mount.
-# Kept as a script rather than a long ExecStart so the credentials stay in one
-# file and shell quoting stays readable.
+# Written by juicefs-host-mount.sh. Starts the JuiceFS client for the host
+# mount. Kept as a script rather than a long ExecStart so the credentials stay in
+# one file and the quoting stays readable.
+
 set -eu
 
-. ${CONFIG_DIR}/${UNIT_NAME}.env
-
-# --no-syslog keeps the client off the host's syslog and --log puts it somewhere
-# an operator can find without journald.
+# \`--network host\` is what makes the Service ClusterIPs in the credentials
+# reachable: they are implemented in the host's network namespace.
 #
-# LD_LIBRARY_PATH is set here rather than system wide: libfdb_c.so is our copy,
-# and putting it on the default search path would shadow any FoundationDB the
-# host installs later.
-LD_LIBRARY_PATH=${LIBRARY_DIR}
-export LD_LIBRARY_PATH
+# The two bind mounts are \`rshared\` on purpose. FUSE mounts are made inside the
+# container, and shared propagation is what lifts them back out to the host.
+# \`--privileged\` is required for that plus access to /dev/fuse.
+#
+# A container from an unclean shutdown may still hold the name; replacing it is
+# cheaper than diagnosing why the unit will not start.
+${DOCKER} rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
 
-exec ${BINARY_PATH} mount "\$METAURL" ${MOUNT_PATH} \\
+exec ${DOCKER} run --rm --name ${CONTAINER_NAME} \\
+  --privileged \\
+  --network host \\
+  --env-file ${ENV_FILE} \\
+  --mount "type=bind,src=${MOUNT_PATH},dst=${MOUNT_PATH},bind-propagation=rshared" \\
+  --mount "type=bind,src=${CACHE_DIR},dst=${CACHE_DIR},bind-propagation=rshared" \\
+  --mount "type=bind,src=${FUSE_CONF},dst=/etc/fuse.conf,readonly" \\
+  --entrypoint /bin/sh \\
+  ${IMAGE} -c '
+set -eu
+# The credentials arrive as environment variables so they never appear in a
+# process list, which on a shared node is world readable.
+exec /usr/local/bin/juicefs mount "\$METAURL" ${MOUNT_PATH} \\
   --storage="\$STORAGE" \\
   --bucket="\$BUCKET" \\
   --access-key="\$ACCESS_KEY" \\
@@ -271,7 +290,8 @@ exec ${BINARY_PATH} mount "\$METAURL" ${MOUNT_PATH} \\
   --cache-eviction=${CACHE_EVICTION} \\
   -o allow_other \\
   --no-syslog \\
-  --log=${LOG_PATH}
+  --foreground
+'
 EOF
 }
 
@@ -280,21 +300,23 @@ render_unit_file() {
 [Unit]
 Description=JuiceFS host mount of the kube ai hub model volume
 Documentation=https://juicefs.com/docs/community/introduction
-# Ordered only after the network, and intentionally not a dependency of
-# anything: the cluster reaches this same volume through the CSI driver, so a
-# mount failure here must leave the node usable rather than block it.
-After=network-online.target
+# The client comes from an image, so Docker has to be up first. Nothing else
+# depends on this unit, and a failure here is not fatal: the cluster reaches the
+# same volume through the CSI driver, so the node stays usable either way.
+Requires=${DOCKER_SERVICE}
+After=${DOCKER_SERVICE} network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStartPre=/bin/mkdir -p ${MOUNT_PATH}
+ExecStartPre=/bin/mkdir -p ${MOUNT_PATH} ${CACHE_DIR}
 ExecStart=${MOUNT_SCRIPT}
-ExecStop=/bin/sh -c 'umount ${MOUNT_PATH} || true'
+# Stopping the container tears the FUSE mount down, but a stale mount point would
+# silently hide the volume and send writes to the local disk, so unmounting is
+# the belt to that braces.
+ExecStop=/bin/sh -c '${DOCKER} rm -f ${CONTAINER_NAME} >/dev/null 2>&1; umount -l ${MOUNT_PATH} || true'
 Restart=on-failure
 RestartSec=10
-# The FUSE child is the mount; killing the supervisor alone would leave it
-# behind, which is why the stop path unmounts explicitly.
 KillMode=control-group
 
 [Install]
@@ -305,8 +327,10 @@ EOF
 render_env_file() {
   cat <<EOF
 # Credentials for the host mount of the ${VOLUME_NAME} JuiceFS volume.
-# Written by juicefs-host-mount.sh. Change the chart or the release instead of
-# editing this file; re-running the script regenerates it.
+# Written by juicefs-host-mount.sh, read by Docker through --env-file, and
+# regenerated every time the script runs.
+#
+# 0600 on purpose: these keys reach the whole volume.
 METAURL=${METAURL}
 VOLUME_NAME=${VOLUME_NAME}
 STORAGE=${STORAGE}
@@ -320,33 +344,9 @@ EOF
 # Steps
 # ---------------------------------------------------------------------------
 
-install_binary() {
-  if [ -x "$BINARY_PATH" ] && [ -f "${LIBRARY_DIR}/${LIBRARY_NAME}" ] && [ "$UPDATE_BINARY" != "true" ]; then
-    log "   juicefs client already at ${BINARY_PATH} (use --update-binary to refresh)"
-    return 0
-  fi
-  command -v "$DOCKER" >/dev/null 2>&1 \
-    || die "docker is required to take the juicefs client out of ${IMAGE}"
-
-  log "   extracting the juicefs client from ${IMAGE}"
-  local container="${UNIT_NAME}-extract-$$"
-  "$DOCKER" rm -f "$container" >/dev/null 2>&1 || true
-  # `create` rather than `run`: nothing in the image needs to execute.
-  "$DOCKER" create --name "$container" "$IMAGE" >/dev/null
-  mkdir -p "$BINARY_DIR"
-  "$DOCKER" cp "${container}:/usr/local/bin/juicefs" "$BINARY_PATH" >/dev/null
-  # The client dlopens this while starting up, whether or not the volume uses
-  # FoundationDB, so the binary on its own fails to launch.
-  "$DOCKER" cp "${container}:/usr/lib/${LIBRARY_NAME}" "${LIBRARY_DIR}/${LIBRARY_NAME}" >/dev/null
-  "$DOCKER" rm -f "$container" >/dev/null 2>&1 || true
-  chmod 0755 "$BINARY_PATH"
-  chmod 0755 "${LIBRARY_DIR}/${LIBRARY_NAME}"
-  log "   installed $(LD_LIBRARY_PATH="$LIBRARY_DIR" "$BINARY_PATH" version 2>/dev/null | head -n 1 || echo "$BINARY_PATH")"
-}
-
-# allow_other is what lets a user other than root enter the mount.
+# allow_other is what lets a user other than root enter the mount, and libfuse
+# only permits it when fuse.conf says so.
 ensure_fuse_conf() {
-  [ "$FUSE_CONF" = "none" ] && return 0
   if [ -f "$FUSE_CONF" ] && grep -Eq '^[[:space:]]*user_allow_other' "$FUSE_CONF"; then
     return 0
   fi
@@ -381,25 +381,21 @@ uninstall_mount() {
   require_root
   log "== removing the host mount"
 
-  if command -v systemctl >/dev/null 2>&1; then
-    if [ "$DRY_RUN" = "true" ]; then
-      log "--- would disable and remove /etc/systemd/system/${UNIT_NAME}.service"
-    else
-      systemctl disable --now "${UNIT_NAME}.service" >/dev/null 2>&1 || true
-      rm -f "/etc/systemd/system/${UNIT_NAME}.service"
-      systemctl daemon-reload
-    fi
-  fi
-
   if [ "$DRY_RUN" = "true" ]; then
-    log "--- would remove ${CONFIG_DIR}/${UNIT_NAME}.env and ${MOUNT_SCRIPT}"
+    log "--- would disable and remove ${UNIT_FILE}"
+    log "--- would stop and remove the ${CONTAINER_NAME} container"
+    log "--- would remove ${ENV_FILE} and ${MOUNT_SCRIPT}"
     log "--- would unmount ${MOUNT_PATH} if mounted"
   else
-    rm -f "${CONFIG_DIR}/${UNIT_NAME}.env" "$MOUNT_SCRIPT"
-    # The client and its library are our copies, so they go too: leaving a
-    # binary that cannot start because its library is gone is worse than
-    # removing both.
-    rm -rf "$BINARY_DIR"
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl disable --now "${UNIT_NAME}.service" >/dev/null 2>&1 || true
+      rm -f "$UNIT_FILE"
+      systemctl daemon-reload
+    fi
+    if command -v "$DOCKER" >/dev/null 2>&1; then
+      "$DOCKER" rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    fi
+    rm -f "$ENV_FILE" "$MOUNT_SCRIPT"
     # Unmount rather than rmdir: leaving a stale directory in place would hide
     # the volume and silently write to the local disk instead of it.
     if mountpoint -q "$MOUNT_PATH" 2>/dev/null; then
@@ -427,32 +423,29 @@ install_mount() {
   log "   metadata: $(printf '%s' "$METAURL" | sed 's#://[^:]*:#://<host>:#')"
   log "   bucket:   ${BUCKET}"
 
-  log "-- preparing the juicefs client"
+  log "-- checking the container runtime"
   if [ "$DRY_RUN" = "true" ]; then
-    if [ -x "$BINARY_PATH" ] && [ "$UPDATE_BINARY" != "true" ]; then
-      log "--- would reuse the client already at ${BINARY_PATH}"
-    else
-      log "--- would extract ${BINARY_PATH} from ${IMAGE}"
-    fi
+    log "--- would require ${DOCKER} and image ${IMAGE}"
   else
-    install_binary
+    command -v "$DOCKER" >/dev/null 2>&1 || die "$DOCKER is required to run the juicefs client"
+    # Only pull when it is missing: on a cluster node the image is normally
+    # already imported, and a pull would need registry credentials we do not have
+    # here.
+    if ! "$DOCKER" image inspect "$IMAGE" >/dev/null 2>&1; then
+      log "   pulling ${IMAGE}"
+      "$DOCKER" pull "$IMAGE" || die "cannot obtain ${IMAGE}; import it or pass --image"
+    fi
   fi
 
   ensure_fuse_conf
-
-  if [ "$DRY_RUN" = "true" ]; then
-    log "--- would create ${CACHE_DIR} and ${MOUNT_PATH}"
-  else
-    mkdir -p "$CACHE_DIR" "$MOUNT_PATH"
-  fi
 
   # The cache directory is shared with the cluster's own mounts on purpose:
   # JuiceFS stores blocks under a directory named after the volume UUID, so
   # pointing both at the same path means the host reads whatever the cluster
   # already downloaded instead of fetching it from MinIO again.
-  write_file "${CONFIG_DIR}/${UNIT_NAME}.env" "$(render_env_file)" 0600 true
+  write_file "$ENV_FILE" "$(render_env_file)" 0600 true
   write_file "$MOUNT_SCRIPT" "$(render_mount_script)" 0755
-  write_file "/etc/systemd/system/${UNIT_NAME}.service" "$(render_unit_file)" 0644
+  write_file "$UNIT_FILE" "$(render_unit_file)" 0644
 
   if [ "$DRY_RUN" = "true" ]; then
     log "== dry run: nothing was changed"
@@ -470,18 +463,25 @@ install_mount() {
 
   log "-- starting the mount"
   systemctl enable --now "${UNIT_NAME}.service" >/dev/null
-  sleep 3
 
-  if mountpoint -q "$MOUNT_PATH"; then
-    log "== mounted at ${MOUNT_PATH}"
-    log "   models live under ${MOUNT_PATH}/<namespace>/<name>, for example"
-    log "   ${MOUNT_PATH}/admin/Qwen3.5-2B"
-    log "   logs: journalctl -u ${UNIT_NAME} -f   or   ${LOG_PATH}"
-  else
-    warn "the unit started but ${MOUNT_PATH} is not a mount point yet"
-    warn "check: systemctl status ${UNIT_NAME}; tail ${LOG_PATH}"
-    die "the mount did not come up"
-  fi
+  # A first run has to fetch the client through the container runtime, so give it
+  # more room than a restart would need before calling it a failure.
+  local waited=0
+  while [ "$waited" -lt 60 ]; do
+    if mountpoint -q "$MOUNT_PATH"; then
+      log "== mounted at ${MOUNT_PATH}"
+      log "   models live under ${MOUNT_PATH}/<namespace>/<name>, for example"
+      log "   ${MOUNT_PATH}/admin/Qwen3.5-2B"
+      log "   logs: journalctl -u ${UNIT_NAME} -f"
+      return 0
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+
+  warn "the unit is running but ${MOUNT_PATH} is not a mount point yet"
+  warn "check: systemctl status ${UNIT_NAME}; journalctl -u ${UNIT_NAME} -n 50"
+  die "the mount did not come up"
 }
 
 # ---------------------------------------------------------------------------
@@ -499,7 +499,6 @@ while [ $# -gt 0 ]; do
     --free-space-ratio)   FREE_SPACE_RATIO="${2:-}"; shift 2 ;;
     --cache-eviction)     CACHE_EVICTION="${2:-}"; shift 2 ;;
     --fuse-conf)          FUSE_CONF="${2:-}"; shift 2 ;;
-    --update-binary)      UPDATE_BINARY="true"; shift ;;
     --no-start)           NO_START="true"; shift ;;
     --uninstall)          UNINSTALL="true"; shift ;;
     --dry-run)            DRY_RUN="true"; shift ;;
@@ -511,6 +510,10 @@ done
 [ -n "$MOUNT_PATH" ] || die "--mount-path cannot be empty"
 [ -n "$CACHE_DIR" ] || die "--cache-dir cannot be empty"
 [ -n "$STORAGE_CLASS" ] || die "--storage-class cannot be empty"
+
+# The unit needs the exact unit name of the container runtime, which depends on
+# how it was packaged. Derive it from the command that will actually be used.
+DOCKER_SERVICE="${DOCKER_SERVICE:-$(basename "$DOCKER").service}"
 
 if [ "$UNINSTALL" = "true" ]; then
   uninstall_mount
