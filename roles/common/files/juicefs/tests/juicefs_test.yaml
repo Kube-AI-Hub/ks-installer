@@ -9,6 +9,7 @@ templates:
   - rbac.yaml
   - controller-statefulset.yaml
   - node-daemonset.yaml
+  - static-pv.yaml
 release:
   name: juicefs
   namespace: kubesphere-system
@@ -344,3 +345,126 @@ tests:
       - equal:
           path: spec.template.spec.volumes[1].hostPath.path
           value: /var/lib/kubelet/plugins_registry
+
+  ## ------------------------------------------------------------------
+  ## Static volumes: the model cache and the public model directory
+  ## ------------------------------------------------------------------
+  - it: declares the model cache at a path an operator can rely on
+    template: static-pv.yaml
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: metadata.name
+          value: kubeaihub-model-cache
+      # The subPath is the contract: it is what the host mount shows and what a
+      # pod mounts, and it must not change when the claim is rebuilt.
+      - equal:
+          path: spec.csi.volumeAttributes.subPath
+          value: model-cache
+      - equal:
+          path: spec.csi.volumeHandle
+          value: kubeaihub-model-cache
+      # Static volumes are never provisioned, but naming the class is what makes
+      # the driver join that class's shared mount pod instead of starting one of
+      # its own for this volume.
+      - equal:
+          path: spec.storageClassName
+          value: juicefs-shared
+      - equal:
+          path: spec.accessModes[0]
+          value: ReadWriteMany
+
+  - it: retains the model cache so a deleted claim cannot delete the models
+    template: static-pv.yaml
+    documentIndex: 0
+    asserts:
+      # Delete would run DeleteVolume, which removes the directory and every
+      # model in it.
+      - equal:
+          path: spec.persistentVolumeReclaimPolicy
+          value: Retain
+      - equal:
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+
+  - it: reserves the cache volume for the claim that will mount it
+    template: static-pv.yaml
+    documentIndex: 0
+    asserts:
+      # Without claimRef the volume sits Available and the binder hands it to
+      # whichever ReadWriteMany claim asks first.
+      - equal:
+          path: spec.claimRef.namespace
+          value: spaces
+      - equal:
+          path: spec.claimRef.name
+          value: csghub-model-cache
+
+  - it: gives the cache volume the same block cache as the StorageClass
+    template: static-pv.yaml
+    documentIndex: 0
+    asserts:
+      # The mount pod is keyed by the hash of these options: a volume that
+      # disagrees with the class gets a second client and a second cache.
+      - contains:
+          path: spec.mountOptions
+          content: "cache-dir=/data/juicefs-cache"
+      - contains:
+          path: spec.mountOptions
+          content: "free-space-ratio=0.1"
+      - contains:
+          path: spec.mountOptions
+          content: "cache-eviction=2-random"
+
+  - it: points the public model volume inside the cache
+    template: static-pv.yaml
+    documentIndex: 1
+    asserts:
+      # public models are a directory inside the cache rather than a volume of
+      # their own, so a deploy that mounts one reads what is already cached.
+      - equal:
+          path: metadata.name
+          value: kubeaihub-public-models
+      - equal:
+          path: spec.csi.volumeAttributes.subPath
+          value: model-cache/public
+      - equal:
+          path: spec.claimRef.namespace
+          value: csghub
+      - equal:
+          path: spec.claimRef.name
+          value: public-models
+
+  - it: turns the capacity into the byte count the driver wants
+    template: static-pv.yaml
+    documentIndex: 0
+    asserts:
+      # The PV capacity is a quantity while csi.volumeAttributes.capacity is
+      # plain bytes, and the driver parses the second as an integer.
+      - equal:
+          path: spec.csi.volumeAttributes.capacity
+          value: "1099511627776"
+
+  - it: moves the static paths with the values
+    template: static-pv.yaml
+    documentIndex: 0
+    set:
+      staticVolumes.kubeaihub-model-cache.subPath: models
+    asserts:
+      - equal:
+          path: spec.csi.volumeAttributes.subPath
+          value: models
+
+  - it: refuses a static volume without a claim to reserve it for
+    template: static-pv.yaml
+    set:
+      staticVolumes.kubeaihub-model-cache.claimName: ""
+    asserts:
+      - failedTemplate: {}
+
+  - it: refuses a static volume without a subPath
+    template: static-pv.yaml
+    set:
+      staticVolumes.kubeaihub-model-cache.subPath: ""
+    asserts:
+      - failedTemplate: {}

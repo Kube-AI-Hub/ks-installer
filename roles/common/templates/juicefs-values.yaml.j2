@@ -1,19 +1,22 @@
-# Copyright 2026 Kube AI Hub.
-#
-# Values for the juicefs chart. Rendered by
-# roles/common/tasks/juicefs-install.yaml.
-#
-# The StorageClass is named juicefs-shared on purpose: csghub-server selects
-# ReadWriteMany for a class whose name matches "shared".
-#
-# Attribute access goes through .get() rather than Jinja attribute lookups: a
-# missing key under common.juicefs would otherwise raise instead of falling back
-# to the default written here.
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+Values for the juicefs chart. Rendered by
+roles/common/tasks/juicefs-install.yaml.
+
+The StorageClass is named juicefs-shared on purpose: csghub-server selects
+ReadWriteMany for a class whose name matches "shared".
+
+Attribute access goes through .get() rather than Jinja attribute lookups: a
+missing key under common.juicefs would otherwise raise instead of falling back
+to the default written here.
+*/ -}}
 {% set jf = common.juicefs | default({}) %}
 {% set jf_image = jf.get('image', {}) %}
 {% set jf_mount = jf.get('mountImage', {}) %}
 {% set jf_metadb = jf.get('metadb', {}) %}
 {% set jf_sc = jf.get('storageClass', 'juicefs-shared') %}
+{% set jf_static = jf.get('staticVolumes', {}) %}
 
 # One registry prefix for every image below; a site that mirrors images keeps its
 # layout unchanged. See common.juicefs.imageRegistry.
@@ -74,3 +77,25 @@ node:
 driverOptions:
   logLevel: {{ jf.get('logLevel', 5) }}
   mountPod: true
+
+# Volumes whose directory inside the JuiceFS filesystem is a name we chose, so
+# that an operator uploading a model and a pod mounting one can agree on a path
+# that does not change when a claim is rebuilt. The claim itself is created by
+# the component that consumes it (see the runner and csghub charts), because a
+# static PV binds to exactly one claim in exactly one namespace.
+#
+# The model cache lives here because the whole platform reads it: the inference
+# warmup job writes into it, csghub-server browses it, and every deploy mounts a
+# directory inside it. Its `public` subdirectory is the one models are uploaded
+# to and served from.
+staticVolumes:
+  kubeaihub-model-cache:
+    subPath: {{ jf_static.get('modelCachePath', 'model-cache') }}
+    claimNamespace: {{ jf_static.get('modelCacheClaimNamespace', 'spaces') }}
+    claimName: {{ jf_static.get('modelCacheClaimName', 'csghub-model-cache') }}
+    capacity: {{ jf_static.get('modelCacheCapacity', '1Ti') }}
+  kubeaihub-public-models:
+    subPath: {{ jf_static.get('publicModelsPath', 'model-cache/public') }}
+    claimNamespace: {{ jf_static.get('publicModelsClaimNamespace', 'csghub') }}
+    claimName: {{ jf_static.get('publicModelsClaimName', 'public-models') }}
+    capacity: {{ jf_static.get('publicModelsCapacity', '1Ti') }}

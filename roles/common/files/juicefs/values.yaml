@@ -168,3 +168,26 @@ podLabels: {}
 ## DaemonSet runs on every node so it must tolerate it.
 tolerations:
   - operator: Exists
+
+## Volumes whose directory inside the JuiceFS filesystem is a name we chose
+## rather than one the provisioner invented (see templates/static-pv.yaml).
+##
+## The claim for each volume is created by the component that consumes it, in
+## the namespace named here: a static PV binds to exactly one claim, so the
+## namespace is part of the volume's identity rather than a deployment detail.
+staticVolumes:
+  kubeaihub-model-cache:
+    ## Directory inside the JuiceFS filesystem holding every cached model, laid
+    ## out as <namespace>/<name>/ by the inference warmup job.
+    subPath: model-cache
+    claimNamespace: spaces
+    claimName: csghub-model-cache
+    capacity: 1Ti
+  kubeaihub-public-models:
+    ## The directory models are uploaded to for the public library. It is a
+    ## subdirectory of the cache on purpose: a public model is already in the
+    ## cache when a deploy mounts it, so nothing has to copy it.
+    subPath: model-cache/public
+    claimNamespace: csghub
+    claimName: public-models
+    capacity: 1Ti

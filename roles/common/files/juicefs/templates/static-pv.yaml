@@ -1,0 +1,78 @@
+{{- /*
+Copyright 2026 Kube AI Hub.
+
+Static volumes: the ones whose directory in the JuiceFS filesystem is a name we
+chose rather than one the provisioner invented.
+
+A dynamically provisioned volume lives in a directory named after its PV
+(`pvc-<uuid>`), which is fine for something only Kubernetes reads. The model
+cache is not: an operator uploads models into it from the host, csghub-server
+browses it, and every deploy mounts a path inside it. A name that changes when
+the claim is rebuilt cannot be a contract, so those volumes are declared here
+with an explicit `subPath` and the claim that owns them is created by the
+component chart that consumes it.
+
+`claimRef` is what makes this safe. Without it the volume would sit Available and
+the binder would happily hand it to the next unrelated PVC that asks the same
+StorageClass for ReadWriteMany, which on a busy cluster is a matter of time.
+*/ -}}
+{{- $root := . -}}
+{{- range $name, $volume := .Values.staticVolumes }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "juicefs.labels" $root | nindent 4 }}
+  annotations:
+    # The claim that owns this volume is created by another chart, so deleting
+    # this release must not take the volume (or its contents) with it.
+    helm.sh/resource-policy: keep
+spec:
+  capacity:
+    storage: {{ $volume.capacity | default "1Ti" }}
+  accessModes:
+    - ReadWriteMany
+  # Retain is not a preference here. Delete would run DeleteVolume, which
+  # removes the directory and every model in it.
+  persistentVolumeReclaimPolicy: Retain
+  # Set even though a static volume is never provisioned: the driver reads it
+  # back to decide which mount pod serves this volume. With
+  # STORAGE_CLASS_SHARE_MOUNT on, a PV naming the class joins the per-node mount
+  # pod of that class instead of starting one of its own, which is what keeps a
+  # single block cache on the node.
+  storageClassName: {{ $root.Values.storageClass.name }}
+  # Must match the StorageClass: the mount pod is keyed by the hash of the mount
+  # settings, so a volume whose options differ gets a second client on the node
+  # and a second block cache beside the first.
+  mountOptions:
+    - {{ printf "cache-dir=%s" $root.Values.node.cacheDir | quote }}
+    {{- with $root.Values.node.cacheSize }}
+    - {{ printf "cache-size=%s" . | quote }}
+    {{- end }}
+    - {{ printf "free-space-ratio=%s" $root.Values.node.freeSpaceRatio | quote }}
+    - {{ printf "cache-eviction=%s" $root.Values.node.cacheEviction | quote }}
+  claimRef:
+    namespace: {{ required (printf "staticVolumes.%s.claimNamespace is required: the namespace that creates the claim this volume is reserved for" $name) $volume.claimNamespace }}
+    name: {{ required (printf "staticVolumes.%s.claimName is required: the claim this volume is reserved for" $name) $volume.claimName }}
+  csi:
+    driver: {{ include "juicefs.driverName" $root }}
+    fsType: ext4
+    # The volume handle doubles as the PV name on purpose: the driver looks the
+    # PV up by handle, and finding it is what lets the volume join the class's
+    # shared mount pod. A handle the cluster cannot resolve would give this
+    # volume a mount pod of its own.
+    volumeHandle: {{ $name }}
+    nodePublishSecretRef:
+      name: {{ include "juicefs.secretName" $root }}
+      namespace: {{ include "juicefs.namespace" $root }}
+    volumeAttributes:
+      # The directory inside the JuiceFS filesystem. This is the contract: it is
+      # what an operator sees under the host mount and what the platform mounts.
+      subPath: {{ required (printf "staticVolumes.%s.subPath is required: the directory inside the JuiceFS filesystem" $name) $volume.subPath }}
+      # The driver turns this into a directory quota, so it is a real limit
+      # rather than a hint. It has to be bytes here even though the PV capacity
+      # above is a Kubernetes quantity.
+      capacity: {{ include "juicefs.capacityBytes" ($volume.capacity | default "1Ti") | quote }}
+{{- end }}

@@ -101,3 +101,34 @@ next to the configuration.
 {{- fail (printf "storageClass.name %q must contain \"shared\": csghub-server picks ReadWriteMany for classes whose name matches 'shared' and ReadWriteOnce for those matching 'local'." .Values.storageClass.name) -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+A Kubernetes quantity as the byte count the driver wants.
+
+The PV capacity is a quantity ("1Ti") while csi.volumeAttributes.capacity is
+plain bytes, and the driver parses the second as an integer. Reading the number
+back out of the first keeps the two from disagreeing, which is the failure mode
+that matters: a mismatch shows up as a directory quota that does not match the
+size the claim asked for.
+*/}}
+{{- define "juicefs.capacityBytes" -}}
+{{- $quantity := . -}}
+{{- if not $quantity -}}
+{{- else -}}
+{{- $units := dict "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 "Pi" 1125899906842624 "K" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "P" 1000000000000000 -}}
+{{- $value := $quantity | toString -}}
+{{- $unit := "" -}}
+{{- $number := $value -}}
+{{- range $suffix, $_ := $units -}}
+{{- if and (eq $unit "") (hasSuffix $suffix $value) -}}
+{{- $unit = $suffix -}}
+{{- $number = trimSuffix $suffix $value -}}
+{{- end -}}
+{{- end -}}
+{{- if eq $unit "" -}}
+{{- $number | int64 -}}
+{{- else -}}
+{{- mulf ($number | float64) (index $units $unit) | int64 -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
