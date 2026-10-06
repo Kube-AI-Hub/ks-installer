@@ -18,9 +18,9 @@
 #     cluster node, where the Service ClusterIPs are routable, so both are
 #     addressed by IP. The node's resolver is systemd-resolved and does not
 #     resolve *.svc.cluster.local names, so names cannot be used.
-#   - The juicefs client ships inside the mount image as a statically linked
-#     binary, so it is copied out of the image rather than installed from a
-#     package. Nothing else from the image is needed.
+#   - The juicefs client is copied out of the mount image rather than installed
+#     from a package. So is libfdb_c.so: the client dlopens it while starting up
+#     even for a non-FoundationDB volume, so the binary alone does not run.
 #
 # Usage:
 #   juicefs-host-mount.sh [options]
@@ -33,8 +33,13 @@ KUBECTL="${KUBECTL:-kubectl}"
 DOCKER="${DOCKER:-docker}"
 
 CONFIG_DIR="/etc/juicefs"
-BINARY_PATH="/usr/local/bin/juicefs"
 UNIT_NAME="juicefs-kubeaihub"
+# The client and the shared library it dlopens live together so uninstalling
+# removes both; a binary left behind without its library only fails later.
+BINARY_DIR="/usr/local/lib/${UNIT_NAME}"
+BINARY_PATH="${BINARY_DIR}/juicefs"
+LIBRARY_DIR="${BINARY_DIR}"
+LIBRARY_NAME="libfdb_c.so"
 MOUNT_SCRIPT="/usr/local/bin/${UNIT_NAME}-mount"
 LOG_PATH="/var/log/${UNIT_NAME}.log"
 
@@ -249,6 +254,13 @@ set -eu
 
 # --no-syslog keeps the client off the host's syslog and --log puts it somewhere
 # an operator can find without journald.
+#
+# LD_LIBRARY_PATH is set here rather than system wide: libfdb_c.so is our copy,
+# and putting it on the default search path would shadow any FoundationDB the
+# host installs later.
+LD_LIBRARY_PATH=${LIBRARY_DIR}
+export LD_LIBRARY_PATH
+
 exec ${BINARY_PATH} mount "\$METAURL" ${MOUNT_PATH} \\
   --storage="\$STORAGE" \\
   --bucket="\$BUCKET" \\
@@ -309,7 +321,7 @@ EOF
 # ---------------------------------------------------------------------------
 
 install_binary() {
-  if [ -x "$BINARY_PATH" ] && [ "$UPDATE_BINARY" != "true" ]; then
+  if [ -x "$BINARY_PATH" ] && [ -f "${LIBRARY_DIR}/${LIBRARY_NAME}" ] && [ "$UPDATE_BINARY" != "true" ]; then
     log "   juicefs client already at ${BINARY_PATH} (use --update-binary to refresh)"
     return 0
   fi
@@ -321,10 +333,15 @@ install_binary() {
   "$DOCKER" rm -f "$container" >/dev/null 2>&1 || true
   # `create` rather than `run`: nothing in the image needs to execute.
   "$DOCKER" create --name "$container" "$IMAGE" >/dev/null
+  mkdir -p "$BINARY_DIR"
   "$DOCKER" cp "${container}:/usr/local/bin/juicefs" "$BINARY_PATH" >/dev/null
+  # The client dlopens this while starting up, whether or not the volume uses
+  # FoundationDB, so the binary on its own fails to launch.
+  "$DOCKER" cp "${container}:/usr/lib/${LIBRARY_NAME}" "${LIBRARY_DIR}/${LIBRARY_NAME}" >/dev/null
   "$DOCKER" rm -f "$container" >/dev/null 2>&1 || true
   chmod 0755 "$BINARY_PATH"
-  log "   installed $("$BINARY_PATH" version 2>/dev/null | head -n 1 || echo "$BINARY_PATH")"
+  chmod 0755 "${LIBRARY_DIR}/${LIBRARY_NAME}"
+  log "   installed $(LD_LIBRARY_PATH="$LIBRARY_DIR" "$BINARY_PATH" version 2>/dev/null | head -n 1 || echo "$BINARY_PATH")"
 }
 
 # allow_other is what lets a user other than root enter the mount.
@@ -379,9 +396,12 @@ uninstall_mount() {
     log "--- would unmount ${MOUNT_PATH} if mounted"
   else
     rm -f "${CONFIG_DIR}/${UNIT_NAME}.env" "$MOUNT_SCRIPT"
+    # The client and its library are our copies, so they go too: leaving a
+    # binary that cannot start because its library is gone is worse than
+    # removing both.
+    rm -rf "$BINARY_DIR"
     # Unmount rather than rmdir: leaving a stale directory in place would hide
-    # file:///data1/kube-ai-hub/models and silently write to the local disk
-    # instead of the volume.
+    # the volume and silently write to the local disk instead of it.
     if mountpoint -q "$MOUNT_PATH" 2>/dev/null; then
       umount "$MOUNT_PATH" || warn "could not unmount ${MOUNT_PATH}"
     fi
