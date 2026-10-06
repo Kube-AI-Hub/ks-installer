@@ -211,12 +211,24 @@ resolve_cluster_host() {
 }
 
 # The mount image ships the juicefs client; nothing else is needed from it.
-default_image() {
+#
+# The image is whatever the CSI driver is configured to use, so read it from
+# there rather than hardcoding a tag that drifts from the deployment. There is no
+# fallback: an image that cannot be pulled would fail the mount with a confusing
+# error, so it is better to say so here.
+discover_image() {
   if [ -n "${JUICEFS_MOUNT_IMAGE:-}" ]; then
     printf '%s' "$JUICEFS_MOUNT_IMAGE"
     return 0
   fi
-  printf '%s' "docker.io/juicedata/mount:ce-v1.2.0"
+  local ref
+  ref=$("$KUBECTL" get deploy,statefulset,daemonset -A -l app.kubernetes.io/name=juicefs \
+    -o jsonpath='{range .items[*]}{range .spec.template.spec.containers[*]}''{range .env[?(@.name=="JUICEFS_MOUNT_IMAGE")]}{.value}{"\n"}{end}''{end}{end}' 2>/dev/null | head -n 1)
+  if [ -n "$ref" ]; then
+    printf '%s' "$ref"
+    return 0
+  fi
+  die "cannot find the juicefs client image (no CSI workload declares JUICEFS_MOUNT_IMAGE); pass --image"
 }
 
 # ---------------------------------------------------------------------------
@@ -380,13 +392,14 @@ uninstall_mount() {
 
 install_mount() {
   require_root
-  [ -n "$IMAGE" ] || IMAGE="$(default_image)"
+  [ -n "$IMAGE" ] || IMAGE="$(discover_image)"
 
   log "== mounting the JuiceFS volume on this node"
 
   log "-- reading the volume credentials"
   read_volume_secret
   log "   secret:   ${NAMESPACE}/${SECRET_NAME}"
+  log "   image:    ${IMAGE}"
 
   log "-- resolving cluster Services to addresses"
   METAURL=$(resolve_cluster_host "$METAURL")
@@ -396,7 +409,11 @@ install_mount() {
 
   log "-- preparing the juicefs client"
   if [ "$DRY_RUN" = "true" ]; then
-    log "--- would extract ${BINARY_PATH} from ${IMAGE}"
+    if [ -x "$BINARY_PATH" ] && [ "$UPDATE_BINARY" != "true" ]; then
+      log "--- would reuse the client already at ${BINARY_PATH}"
+    else
+      log "--- would extract ${BINARY_PATH} from ${IMAGE}"
+    fi
   else
     install_binary
   fi
