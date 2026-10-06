@@ -59,6 +59,13 @@ FUSE_CONF="/etc/fuse.conf"
 STORAGE_CLASS="juicefs-shared"
 NAMESPACE=""
 SECRET_NAME=""
+# Which volume to expose. The CSI driver gives every PersistentVolume its own
+# directory inside the JuiceFS filesystem, named after the PV, so mounting the
+# filesystem root would show UUIDs instead of models. Point this at the claim the
+# platform caches models in and the subdirectory is resolved from the bound
+# volume, which is how <mount-path>/admin/Qwen3.5-2B becomes the path.
+# Use "none" to mount the filesystem root.
+PVC="spaces/csghub-model-cache"
 MOUNT_PATH="/data1/kube-ai-hub/models"
 CACHE_DIR="/data1/juicefs-cache"
 IMAGE=""
@@ -94,6 +101,11 @@ Options:
                             being fetched again (default /data1/juicefs-cache).
   --storage-class <name>    StorageClass whose CSI parameters name the volume
                             Secret (default juicefs-shared).
+  --pvc <ns>/<name>         Expose this claim's directory as the mount root, so
+                            the mount shows models rather than PersistentVolume
+                            names (default spaces/csghub-model-cache, the claim
+                            the platform caches models in). Pass "none" to mount
+                            the whole filesystem.
   --secret <name>           Volume Secret, if it is not the one the
                             StorageClass points at.
   --namespace <ns>          Namespace of the volume Secret, overriding the one
@@ -225,6 +237,31 @@ resolve_cluster_host() {
   printf '%s' "${url/"$host_port"/"${ip}${port}"}"
 }
 
+# Resolve the directory inside the JuiceFS filesystem that backs a claim.
+#
+# The CSI driver lays every PersistentVolume out as its own directory named after
+# the PV, so the filesystem root is a list of "pvc-<uuid>" entries. Resolving the
+# claim to its bound PV keeps the mount readable without an operator having to
+# look up a UUID.
+resolve_sub_path() {
+  [ "$PVC" = "none" ] && return 0
+
+  local ns="${PVC%%/*}" name="${PVC#*/}"
+  [ -n "$ns" ] && [ -n "$name" ] && [ "$ns" != "$PVC" ] \
+    || die "--pvc must be <namespace>/<name>, or none"
+
+  local pv
+  pv=$("$KUBECTL" -n "$ns" get pvc "$name" -o jsonpath='{.spec.volumeName}' 2>/dev/null || true)
+  [ -n "$pv" ] || die "cannot find ${ns}/${name}; is it created yet?"
+
+  SUB_PATH=$("$KUBECTL" get pv "$pv" -o jsonpath='{.spec.csi.volumeAttributes.subPath}' 2>/dev/null || true)
+  if [ -z "$SUB_PATH" ]; then
+    # JuiceFS defaults the subdirectory to the volume handle when the StorageClass
+    # does not set one, which is the PV name for this driver.
+    SUB_PATH="$pv"
+  fi
+}
+
 # The image holding the juicefs client.
 #
 # The CSI driver is already configured with one, so read it from there rather
@@ -291,15 +328,23 @@ set -eu
 #
 # The client stays in the foreground by default, which is what keeps this
 # container alive and therefore the mount alive.
-exec /usr/local/bin/juicefs mount "\$METAURL" "\$MOUNT_PATH" \
-  --storage="\$STORAGE" \
-  --bucket="\$BUCKET" \
-  --cache-dir="\$CACHE_DIR" \
-  --free-space-ratio="\$FREE_SPACE_RATIO" \
-  --cache-eviction="\$CACHE_EVICTION" \
-  --metrics="\$METRICS_ADDR" \
+set -- \
+  --storage="$STORAGE" \
+  --bucket="$BUCKET" \
+  --cache-dir="$CACHE_DIR" \
+  --free-space-ratio="$FREE_SPACE_RATIO" \
+  --cache-eviction="$CACHE_EVICTION" \
+  --metrics="$METRICS_ADDR" \
   -o allow_other \
   --no-syslog
+
+# Empty means the whole filesystem was asked for, and the flag would reject an
+# empty value.
+if [ -n "$SUB_PATH" ]; then
+  set -- "$@" --subdir="$SUB_PATH"
+fi
+
+exec /usr/local/bin/juicefs mount "$METAURL" "$MOUNT_PATH" "$@"
 '
 EOF
 }
@@ -346,6 +391,7 @@ STORAGE=${STORAGE}
 BUCKET=${BUCKET}
 ACCESS_KEY=${ACCESS_KEY}
 SECRET_KEY=${SECRET_KEY}
+SUB_PATH=${SUB_PATH}
 MOUNT_PATH=${MOUNT_PATH}
 CACHE_DIR=${CACHE_DIR}
 FREE_SPACE_RATIO=${FREE_SPACE_RATIO}
@@ -437,6 +483,14 @@ install_mount() {
   log "   metadata: $(printf '%s' "$METAURL" | sed 's#://[^:]*:#://<host>:#')"
   log "   bucket:   ${BUCKET}"
 
+  if [ "$PVC" = "none" ]; then
+    SUB_PATH=""
+    log "-- exposing the whole filesystem"
+  else
+    resolve_sub_path
+    log "-- exposing ${PVC} at the mount root (subdir ${SUB_PATH})"
+  fi
+
   log "-- checking the container runtime"
   if [ "$DRY_RUN" = "true" ]; then
     log "--- would require ${DOCKER} and image ${IMAGE}"
@@ -507,6 +561,7 @@ while [ $# -gt 0 ]; do
     --mount-path)         MOUNT_PATH="${2:-}"; shift 2 ;;
     --cache-dir)          CACHE_DIR="${2:-}"; shift 2 ;;
     --storage-class)      STORAGE_CLASS="${2:-}"; shift 2 ;;
+    --pvc)                PVC="${2:-}"; shift 2 ;;
     --secret)             SECRET_NAME="${2:-}"; shift 2 ;;
     --namespace)          NAMESPACE="${2:-}"; shift 2 ;;
     --image)              IMAGE="${2:-}"; shift 2 ;;
