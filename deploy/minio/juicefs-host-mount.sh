@@ -169,10 +169,17 @@ read_volume_secret() {
 # do not have to live in the same namespace as the Secret.
 resolve_cluster_host() {
   local url="$1"
-  local host_port
-  host_port=$(printf '%s' "$url" | sed -n 's#^[a-z0-9]*://\([^/]*\).*#\1#p')
-  [ -n "$host_port" ] || { printf '%s' "$url"; return 0; }
 
+  # Authority is everything after "scheme://" up to the first "/". Note the
+  # metadata URL carries credentials, so the host is not simply the part before
+  # the first ":".
+  local authority
+  authority=$(printf '%s' "$url" | sed -e 's#^[A-Za-z0-9+.-]*://##' -e 's#/.*$##')
+  [ -n "$authority" ] || { printf '%s' "$url"; return 0; }
+
+  # Drop "user:password@". The credentials stay in the URL itself; only the host
+  # is replaced below.
+  local host_port="${authority##*@}"
   local host="${host_port%%:*}"
   local port=""
   if [ "$host_port" != "$host" ]; then
@@ -324,10 +331,16 @@ ensure_fuse_conf() {
 }
 
 write_file() {
-  local path="$1" content="$2" mode="$3"
+  local path="$1" content="$2" mode="$3" redact="${4:-false}"
   if [ "$DRY_RUN" = "true" ]; then
     log "--- would write ${path} (mode ${mode})"
-    printf '%s\n' "$content"
+    if [ "$redact" = "true" ]; then
+      # Keep the shape of the rendered file visible without spilling the object
+      # store keys into a terminal or a shared log.
+      printf '%s\n' "$content" | sed -E 's/^((ACCESS|SECRET)_KEY=).*/\1<redacted>/'
+    else
+      printf '%s\n' "$content"
+    fi
     return 0
   fi
   mkdir -p "$(dirname "$path")"
@@ -400,7 +413,7 @@ install_mount() {
   # JuiceFS stores blocks under a directory named after the volume UUID, so
   # pointing both at the same path means the host reads whatever the cluster
   # already downloaded instead of fetching it from MinIO again.
-  write_file "${CONFIG_DIR}/${UNIT_NAME}.env" "$(render_env_file)" 0600
+  write_file "${CONFIG_DIR}/${UNIT_NAME}.env" "$(render_env_file)" 0600 true
   write_file "$MOUNT_SCRIPT" "$(render_mount_script)" 0755
   write_file "/etc/systemd/system/${UNIT_NAME}.service" "$(render_unit_file)" 0644
 
