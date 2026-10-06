@@ -77,6 +77,19 @@ CACHE_EVICTION="2-random"
 # distinct address instead of failing to bind.
 METRICS_ADDR="127.0.0.1:9568"
 
+# Stage writes locally and upload them in the background.
+#
+# Off by default, because staged blocks are lost if the node dies before they
+# drain, and this mount is also the one an operator hand-edits models through.
+# It is what makes bulk ingest possible though: the object store behind this
+# volume sustains roughly 100MB/s here, and uploading synchronously blocks the
+# FUSE request loop for long enough that the client's own watchdog kills the
+# mount, which surfaces to the writer as EIO.
+WRITEBACK="false"
+# Local cache cap. Empty keeps the client default of 100GiB. A writeback backlog
+# needs more than that to absorb a burst while the object store drains slowly.
+CACHE_SIZE=""
+
 DRY_RUN="false"
 UNINSTALL="false"
 NO_START="false"
@@ -117,6 +130,13 @@ Options:
                             is this full (default 0.1).
   --cache-eviction <mode>   Cache eviction policy, none or 2-random
                             (default 2-random).
+  --cache-size <size>       Cap on the local cache, e.g. 200G (default: the
+                            client's own 100GiB). Raise it with --writeback so a
+                            burst can be absorbed while the object store drains.
+  --writeback               Stage writes in the local cache and upload them in
+                            the background instead of blocking on the object
+                            store. Intended for bulk ingest; read the note below
+                            before turning it on.
   --fuse-conf <file>        Where the mount records that non-root users may enter
                             it (default /etc/fuse.conf). Created if missing.
   --no-start                Write the configuration but do not start the unit.
@@ -135,6 +155,12 @@ Notes:
   - Writing through this mount is possible. Prefer editing models while the
     inference instance is stopped: an engine that already loaded its weights is
     unaffected, but the next start reads whatever the files now contain.
+  - --writeback trades durability for speed. Staged blocks still live only on
+    this node's disk until they drain to the object store, so a node that dies
+    before it drains loses them. Use it for a copy that can be repeated, not for
+    the only copy of anything; the client's own documentation says the same. On
+    a slow object store it is also the difference between ingesting at the
+    store's rate and the mount being killed by its own watchdog.
 EOF
 }
 
@@ -344,6 +370,15 @@ if [ -n "\$SUB_PATH" ]; then
   set -- "\$@" --subdir="\$SUB_PATH"
 fi
 
+# Both are optional so an empty value never reaches the client, which would
+# reject it the same way it rejects an empty --subdir.
+if [ -n "\$CACHE_SIZE" ]; then
+  set -- "\$@" --cache-size="\$CACHE_SIZE"
+fi
+if [ "\$WRITEBACK" = "true" ]; then
+  set -- "\$@" --writeback
+fi
+
 exec /usr/local/bin/juicefs mount "\$METAURL" "\$MOUNT_PATH" "\$@"
 '
 EOF
@@ -397,6 +432,8 @@ CACHE_DIR=${CACHE_DIR}
 FREE_SPACE_RATIO=${FREE_SPACE_RATIO}
 CACHE_EVICTION=${CACHE_EVICTION}
 METRICS_ADDR=${METRICS_ADDR}
+WRITEBACK=${WRITEBACK}
+CACHE_SIZE=${CACHE_SIZE}
 EOF
 }
 
@@ -570,6 +607,8 @@ while [ $# -gt 0 ]; do
     --image)              IMAGE="${2:-}"; shift 2 ;;
     --free-space-ratio)   FREE_SPACE_RATIO="${2:-}"; shift 2 ;;
     --cache-eviction)     CACHE_EVICTION="${2:-}"; shift 2 ;;
+    --cache-size)         CACHE_SIZE="${2:-}"; shift 2 ;;
+    --writeback)          WRITEBACK="true"; shift ;;
     --fuse-conf)          FUSE_CONF="${2:-}"; shift 2 ;;
     --no-start)           NO_START="true"; shift ;;
     --uninstall)          UNINSTALL="true"; shift ;;
