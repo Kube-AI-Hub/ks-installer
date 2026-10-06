@@ -26,8 +26,12 @@ spec:
 ---
 # Standard KServe InferenceService (non-LLMISVC). Runner's ClusterIP is labeled
 # kserve.io/component=workload and exposes engine /metrics on port http (8000).
-# The LLMISVC ServiceMonitor above does not match these Services, and
-# prometheus.io annotations are ignored by KubeSphere (ServiceMonitor-only).
+#
+# The opencsg.com/kserve-backend label is what keeps this disjoint from the
+# LLMISVC monitor above. An LLMISVC instance gets a Service from KServe *and* the
+# runner's ClusterIP, and both carry kserve.io/component=workload, so without the
+# backend label both monitors scrape the same pod and every engine counter is
+# collected twice - which the analysis charts then sum, doubling every value.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -44,6 +48,7 @@ spec:
     matchLabels:
       kserve.io/component: workload
       opencsg.com/managed-by: csghub-runner
+      opencsg.com/kserve-backend: kserve-standard
   endpoints:
     - port: http
       path: /metrics
