@@ -39,9 +39,13 @@ MOUNT_SCRIPT="/usr/local/bin/${UNIT_NAME}-mount"
 LOG_PATH="/var/log/${UNIT_NAME}.log"
 
 # Defaults are the ones the storage foundation installs, so a plain run on a
-# standard cluster needs no options at all.
-NAMESPACE="kubesphere-system"
-RELEASE="juicefs"
+# standard cluster needs no options at all. The credentials come from the
+# StorageClass rather than from a guessed Secret name: the CSI parameters on the
+# class name the Secret and its namespace, so a renamed release cannot leave this
+# script reading the wrong object.
+STORAGE_CLASS="juicefs-shared"
+NAMESPACE=""
+SECRET_NAME=""
 MOUNT_PATH="/data1/kube-ai-hub/models"
 CACHE_DIR="/data1/juicefs-cache"
 IMAGE=""
@@ -73,10 +77,12 @@ Options:
                             directory the cluster uses so a file the cluster
                             already read is served from local disk instead of
                             being fetched again (default /data1/juicefs-cache).
-  --namespace <ns>          Namespace of the JuiceFS release
-                            (default kubesphere-system).
-  --release <name>          Helm release name (default juicefs). The volume
-                            Secret is named <release>-<release>-secret.
+  --storage-class <name>    StorageClass whose CSI parameters name the volume
+                            Secret (default juicefs-shared).
+  --secret <name>           Volume Secret, if it is not the one the
+                            StorageClass points at.
+  --namespace <ns>          Namespace of the volume Secret, overriding the one
+                            recorded on the StorageClass.
   --image <img>             Image to take the juicefs client out of. Defaults to
                             $JUICEFS_MOUNT_IMAGE, else the tag the chart ships.
   --free-space-ratio <r>    Stop caching once the filesystem holding the cache
@@ -118,23 +124,31 @@ require_root() {
 #
 # The Secret the CSI driver uses is the source of truth: it holds the metadata
 # URL, the bucket and the object store keys, so nothing is recomputed here and a
-# rotated credential is picked up by re-running the script.
+# rotated credential is picked up by re-running the script. Which Secret that is
+# comes from the StorageClass, not from a guessed name.
 read_volume_secret() {
   command -v "$KUBECTL" >/dev/null 2>&1 || die "$KUBECTL is required"
 
-  local secret_name="${RELEASE}-${RELEASE}-secret"
-  local json
-  json=$("$KUBECTL" -n "$NAMESPACE" get secret "$secret_name" -o json 2>/dev/null) \
-    || die "cannot read secret ${NAMESPACE}/${secret_name}; is the JuiceFS release installed?"
+  if [ -z "$SECRET_NAME" ]; then
+    local param_secret param_ns
+    param_secret=$("$KUBECTL" get sc "$STORAGE_CLASS" \
+      -o jsonpath='{.parameters.csi\.storage\.k8s\.io/node-publish-secret-name}' 2>/dev/null || true)
+    param_ns=$("$KUBECTL" get sc "$STORAGE_CLASS" \
+      -o jsonpath='{.parameters.csi\.storage\.k8s\.io/node-publish-secret-namespace}' 2>/dev/null || true)
+    [ -n "$param_secret" ] || die "StorageClass ${STORAGE_CLASS} does not name a node publish secret; pass --secret"
+    SECRET_NAME="$param_secret"
+    [ -n "$NAMESPACE" ] || NAMESPACE="$param_ns"
+  fi
+  [ -n "$NAMESPACE" ] || die "no namespace for secret ${SECRET_NAME}; pass --namespace"
+
+  "$KUBECTL" -n "$NAMESPACE" get secret "$SECRET_NAME" >/dev/null 2>&1 \
+    || die "cannot read secret ${NAMESPACE}/${SECRET_NAME}"
 
   local key value
   for key in metaurl name storage bucket access-key secret-key; do
-    # The Secret stores these as base64, but `stringData` in the original object
-    # is already one level deep once the API server has it, so decode the data
-    # map rather than parsing raw JSON text.
-    value=$("$KUBECTL" -n "$NAMESPACE" get secret "$secret_name" \
+    value=$("$KUBECTL" -n "$NAMESPACE" get secret "$SECRET_NAME" \
       -o "jsonpath={.data.${key}}" 2>/dev/null | base64 -d 2>/dev/null || true)
-    [ -n "$value" ] || die "secret ${NAMESPACE}/${secret_name} has no ${key}"
+    [ -n "$value" ] || die "secret ${NAMESPACE}/${SECRET_NAME} has no ${key}"
     case "$key" in
       metaurl) METAURL="$value" ;;
       name) VOLUME_NAME="$value" ;;
@@ -149,7 +163,10 @@ read_volume_secret() {
 # Replace the Service name in a URL with its ClusterIP.
 #
 # The node reaches cluster Services by address but cannot resolve their names:
-# its resolver is systemd-resolved, which knows nothing about cluster DNS.
+# its resolver is systemd-resolved, which knows nothing about cluster DNS. The
+# namespace comes from the URL itself when it is a fully qualified
+# "<service>.<namespace>.svc" name, so the metadata database and the object store
+# do not have to live in the same namespace as the Secret.
 resolve_cluster_host() {
   local url="$1"
   local host_port
@@ -168,12 +185,18 @@ resolve_cluster_host() {
     return 0
   fi
 
-  # "ks-minio.kubesphere-system.svc:9000" -> the Service is "ks-minio".
+  # "ks-minio.kubesphere-system.svc" -> service "ks-minio" in "kubesphere-system".
   local service="${host%%.*}"
+  local rest="${host#*.}"
+  local ns="$NAMESPACE"
+  case "$rest" in
+    *.*) ns="${rest%%.*}" ;;
+  esac
+
   local ip
-  ip=$("$KUBECTL" -n "$NAMESPACE" get svc "$service" -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)
+  ip=$("$KUBECTL" -n "$ns" get svc "$service" -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)
   if [ -z "$ip" ] || [ "$ip" = "None" ]; then
-    warn "cannot resolve Service ${NAMESPACE}/${service}; leaving ${host} in place"
+    warn "cannot resolve Service ${ns}/${service}; leaving ${host} in place"
     printf '%s' "$url"
     return 0
   fi
@@ -226,11 +249,11 @@ render_unit_file() {
 [Unit]
 Description=JuiceFS host mount of the kube ai hub model volume
 Documentation=https://juicefs.com/docs/community/introduction
+# Ordered only after the network, and intentionally not a dependency of
+# anything: the cluster reaches this same volume through the CSI driver, so a
+# mount failure here must leave the node usable rather than block it.
 After=network-online.target
 Wants=network-online.target
-# Never gate the kubelet on this: a mount failure must leave the node usable,
-# since the cluster reaches the same volume through the CSI driver anyway.
-Before=network.target
 
 [Service]
 Type=simple
@@ -250,8 +273,8 @@ EOF
 
 render_env_file() {
   cat <<EOF
-# Credentials for the host mount of the ${RELEASE} JuiceFS volume.
-# Written by juicefs-host-mount.sh. Change the release or the chart instead of
+# Credentials for the host mount of the ${VOLUME_NAME} JuiceFS volume.
+# Written by juicefs-host-mount.sh. Change the chart or the release instead of
 # editing this file; re-running the script regenerates it.
 METAURL=${METAURL}
 VOLUME_NAME=${VOLUME_NAME}
@@ -346,10 +369,11 @@ install_mount() {
   require_root
   [ -n "$IMAGE" ] || IMAGE="$(default_image)"
 
-  log "== mounting the ${RELEASE} JuiceFS volume on this node"
+  log "== mounting the JuiceFS volume on this node"
 
-  log "-- reading the volume credentials from the ${RELEASE} Secret"
+  log "-- reading the volume credentials"
   read_volume_secret
+  log "   secret:   ${NAMESPACE}/${SECRET_NAME}"
 
   log "-- resolving cluster Services to addresses"
   METAURL=$(resolve_cluster_host "$METAURL")
@@ -418,8 +442,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --mount-path)         MOUNT_PATH="${2:-}"; shift 2 ;;
     --cache-dir)          CACHE_DIR="${2:-}"; shift 2 ;;
+    --storage-class)      STORAGE_CLASS="${2:-}"; shift 2 ;;
+    --secret)             SECRET_NAME="${2:-}"; shift 2 ;;
     --namespace)          NAMESPACE="${2:-}"; shift 2 ;;
-    --release)            RELEASE="${2:-}"; shift 2 ;;
     --image)              IMAGE="${2:-}"; shift 2 ;;
     --free-space-ratio)   FREE_SPACE_RATIO="${2:-}"; shift 2 ;;
     --cache-eviction)     CACHE_EVICTION="${2:-}"; shift 2 ;;
@@ -435,6 +460,7 @@ done
 
 [ -n "$MOUNT_PATH" ] || die "--mount-path cannot be empty"
 [ -n "$CACHE_DIR" ] || die "--cache-dir cannot be empty"
+[ -n "$STORAGE_CLASS" ] || die "--storage-class cannot be empty"
 
 if [ "$UNINSTALL" = "true" ]; then
   uninstall_mount
