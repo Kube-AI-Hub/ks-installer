@@ -65,6 +65,10 @@ IMAGE=""
 
 FREE_SPACE_RATIO="0.1"
 CACHE_EVICTION="2-random"
+# The CSI mount pod runs the client on the host's network namespace and leaves
+# the metrics address at its default, so the default is taken. Give this one a
+# distinct address instead of failing to bind.
+METRICS_ADDR="127.0.0.1:9568"
 
 DRY_RUN="false"
 UNINSTALL="false"
@@ -284,15 +288,18 @@ set -eu
 # The client reads its credentials from the environment; it has no flags for
 # them. Keeping them there also keeps them out of a process list, which on a
 # shared node is world readable.
+#
+# The client stays in the foreground by default, which is what keeps this
+# container alive and therefore the mount alive.
 exec /usr/local/bin/juicefs mount "\$METAURL" "\$MOUNT_PATH" \
   --storage="\$STORAGE" \
   --bucket="\$BUCKET" \
   --cache-dir="\$CACHE_DIR" \
   --free-space-ratio="\$FREE_SPACE_RATIO" \
   --cache-eviction="\$CACHE_EVICTION" \
+  --metrics="\$METRICS_ADDR" \
   -o allow_other \
-  --no-syslog \
-  --foreground
+  --no-syslog
 '
 EOF
 }
@@ -343,6 +350,7 @@ MOUNT_PATH=${MOUNT_PATH}
 CACHE_DIR=${CACHE_DIR}
 FREE_SPACE_RATIO=${FREE_SPACE_RATIO}
 CACHE_EVICTION=${CACHE_EVICTION}
+METRICS_ADDR=${METRICS_ADDR}
 EOF
 }
 
