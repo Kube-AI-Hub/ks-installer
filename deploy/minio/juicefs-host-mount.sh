@@ -530,7 +530,10 @@ install_mount() {
   fi
 
   log "-- starting the mount"
-  systemctl enable --now "${UNIT_NAME}.service" >/dev/null
+  systemctl enable "${UNIT_NAME}.service" >/dev/null
+  # restart, not `--now`: the unit may already be running with an older
+  # configuration, and `enable --now` would leave that one in place.
+  systemctl restart "${UNIT_NAME}.service"
 
   # A first run has to fetch the client through the container runtime, so give it
   # more room than a restart would need before calling it a failure.
