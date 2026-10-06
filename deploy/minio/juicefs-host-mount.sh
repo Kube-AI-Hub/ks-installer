@@ -251,18 +251,21 @@ render_mount_script() {
 #!/bin/sh
 # Copyright 2026 Kube AI Hub.
 #
-# Written by juicefs-host-mount.sh. Starts the JuiceFS client for the host
-# mount. Kept as a script rather than a long ExecStart so the credentials stay in
-# one file and the quoting stays readable.
+# Written by juicefs-host-mount.sh. Starts the JuiceFS client for the host mount.
+# Kept as a script rather than a long ExecStart so the quoting stays readable.
+#
+# The values the client needs are read from the environment file the unit
+# declares, not interpolated here, because Docker only supplies that file to the
+# container and not to this script.
 
 set -eu
 
-# \`--network host\` is what makes the Service ClusterIPs in the credentials
+# --network host is what makes the Service ClusterIPs in the credentials
 # reachable: they are implemented in the host's network namespace.
 #
-# The two bind mounts are \`rshared\` on purpose. FUSE mounts are made inside the
+# The two bind mounts are rshared on purpose. FUSE mounts are made inside the
 # container, and shared propagation is what lifts them back out to the host.
-# \`--privileged\` is required for that plus access to /dev/fuse.
+# --privileged is required for that plus access to /dev/fuse.
 #
 # A container from an unclean shutdown may still hold the name; replacing it is
 # cheaper than diagnosing why the unit will not start.
@@ -278,18 +281,17 @@ exec ${DOCKER} run --rm --name ${CONTAINER_NAME} \\
   --entrypoint /bin/sh \\
   ${IMAGE} -c '
 set -eu
-# The credentials arrive as environment variables so they never appear in a
-# process list, which on a shared node is world readable.
-exec /usr/local/bin/juicefs mount "\$METAURL" ${MOUNT_PATH} \\
-  --storage="\$STORAGE" \\
-  --bucket="\$BUCKET" \\
-  --access-key="\$ACCESS_KEY" \\
-  --secret-key="\$SECRET_KEY" \\
-  --cache-dir=${CACHE_DIR} \\
-  --free-space-ratio=${FREE_SPACE_RATIO} \\
-  --cache-eviction=${CACHE_EVICTION} \\
-  -o allow_other \\
-  --no-syslog \\
+# The client reads its credentials from the environment; it has no flags for
+# them. Keeping them there also keeps them out of a process list, which on a
+# shared node is world readable.
+exec /usr/local/bin/juicefs mount "\$METAURL" "\$MOUNT_PATH" \
+  --storage="\$STORAGE" \
+  --bucket="\$BUCKET" \
+  --cache-dir="\$CACHE_DIR" \
+  --free-space-ratio="\$FREE_SPACE_RATIO" \
+  --cache-eviction="\$CACHE_EVICTION" \
+  -o allow_other \
+  --no-syslog \
   --foreground
 '
 EOF
@@ -326,17 +328,21 @@ EOF
 
 render_env_file() {
   cat <<EOF
-# Credentials for the host mount of the ${VOLUME_NAME} JuiceFS volume.
-# Written by juicefs-host-mount.sh, read by Docker through --env-file, and
-# regenerated every time the script runs.
+# Environment for the host mount of the ${VOLUME_NAME} JuiceFS volume: the client
+# credentials plus where it mounts and caches. Written by juicefs-host-mount.sh,
+# handed to the container by Docker, and regenerated every time the script runs.
 #
-# 0600 on purpose: these keys reach the whole volume.
+# 0600 on purpose. These keys reach the whole volume.
 METAURL=${METAURL}
 VOLUME_NAME=${VOLUME_NAME}
 STORAGE=${STORAGE}
 BUCKET=${BUCKET}
 ACCESS_KEY=${ACCESS_KEY}
 SECRET_KEY=${SECRET_KEY}
+MOUNT_PATH=${MOUNT_PATH}
+CACHE_DIR=${CACHE_DIR}
+FREE_SPACE_RATIO=${FREE_SPACE_RATIO}
+CACHE_EVICTION=${CACHE_EVICTION}
 EOF
 }
 
