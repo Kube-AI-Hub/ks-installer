@@ -177,6 +177,20 @@ driverOptions:
   ## Run each mount in its own pod instead of a process inside the CSI pod. This
   ## is what upstream recommends and what makes a stuck mount debuggable.
   mountPod: true
+  ## CPU and memory ceiling for each mount pod.
+  ##
+  ## JuiceFS serves reads and writes from the mount pod itself, so this ceiling is
+  ## the throughput ceiling for every workload on the node that uses a volume from
+  ## this class. The driver's own default is 2 CPUs, which is not enough: measured
+  ## here, four uncached 7GB shards read at 0.8GB/s through the mount pod against
+  ## 3.3GB/s through an unconstrained mount of the same volume on the same node,
+  ## and the pod was using over three cores while serving them.
+  ##
+  ## This matters most for model loading, which reads hundreds of gigabytes: at the
+  ## default, 476GB took over twenty minutes and ran past the engine's startup
+  ## budget, and at 16 CPUs it takes about a minute and a half.
+  mountPodCpu: "16"
+  mountPodMemory: 5Gi
 
 ## Debilitate mount point. JuiceFS stores a per-pod mountpoint; on a node running
 ## many workloads this can be raised without consequence.

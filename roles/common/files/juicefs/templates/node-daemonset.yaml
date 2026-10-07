@@ -62,6 +62,11 @@ spec:
             - --logtostderr
             - --nodeid=$(NODE_NAME)
             - --v={{ .Values.driverOptions.logLevel }}
+            # Mount pod resources come from the driver's own config, not from the
+            # StorageClass or the PV, so the flag has to be passed here. Only the
+            # node plugin gets it: mount pods are created by the node plugin, and
+            # the controller fails at startup with the same flag.
+            - --config=/etc/juicefs-csi/config.yaml
             {{- range .Values.nodeExtraArgs }}
             - {{ . }}
             {{- end }}
@@ -126,6 +131,11 @@ spec:
               mountPropagation: Bidirectional
             - name: config-dir
               mountPath: /var/lib/juicefs/config
+            # The driver's own config, read because of the --config argument above.
+            # Read-only: nothing writes it at runtime.
+            - name: driver-config
+              mountPath: /etc/juicefs-csi
+              readOnly: true
             - name: device-dir
               mountPath: /dev
             - name: update-conf-dir
@@ -187,6 +197,9 @@ spec:
           hostPath:
             path: {{ .Values.node.configPath }}
             type: DirectoryOrCreate
+        - name: driver-config
+          configMap:
+            name: {{ include "juicefs.fullname" . }}-driver-config
         - name: device-dir
           hostPath:
             path: /dev

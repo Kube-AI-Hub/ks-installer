@@ -92,6 +92,19 @@ spec:
         verifyCacheChecksum: none
         # The real guard against filling the disk.
         freeSpaceRatio: "0.1"
+      # The mount pod serves reads and writes itself, so this is the throughput
+      # ceiling for every workload on a node using a volume of this class. The
+      # driver's default of 2 CPUs is the difference between reading a 476GB model
+      # in about a minute and a half and reading it in over twenty minutes:
+      # measured on gpu02 with the page cache dropped, four uncached shards read at
+      # 0.8GB/s at the default ceiling against 3.3GB/s through an unconstrained
+      # mount of the same volume on the same node.
+      #
+      # Applies through the driver's own config: the node plugin is given
+      # --config pointing at a ConfigMap, because mount pod resources are not read
+      # from the StorageClass or the PV.
+      mountPodCpu: "16"
+      mountPodMemory: 5Gi
       metadb:
         storageClass: local-static
         size: 20Gi

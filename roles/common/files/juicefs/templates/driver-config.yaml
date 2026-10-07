@@ -1,0 +1,33 @@
+# Copyright 2026 Kube AI Hub.
+#
+# Driver configuration for the JuiceFS CSI plugin.
+#
+# The driver reads its own config from the file named by --config, and the node
+# plugin is given this ConfigMap's file for that. Without it the driver falls back
+# to a 2 CPU ceiling for mount pods, which is the ceiling on every read and write
+# that any workload on the node makes through a volume of this class.
+#
+# A ConfigMap rather than a file on each node on purpose: the driver treats a
+# missing config file as fatal, and a per-node file has to exist on every node or
+# the plugin there crashloops.
+#
+# Only the node daemonset gets the flag. Mount pods are created by the node plugin,
+# and giving the controller the same flag made it fail at startup.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "juicefs.fullname" . }}-driver-config
+  namespace: {{ include "juicefs.namespace" . }}
+  labels:
+    {{- include "juicefs.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    # Resources for the per-node mount pods.
+    mountPodPatch:
+      - resources:
+          requests:
+            cpu: "1"
+            memory: 1Gi
+          limits:
+            cpu: {{ .Values.driverOptions.mountPodCpu | quote }}
+            memory: {{ .Values.driverOptions.mountPodMemory | quote }}

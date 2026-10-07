@@ -80,6 +80,13 @@ node:
 driverOptions:
   logLevel: {{ jf.get('logLevel', 5) }}
   mountPod: true
+  # JuiceFS serves reads and writes from the mount pod itself, so this ceiling is
+  # the throughput ceiling for every workload on the node using a volume of this
+  # class. The driver default of 2 CPUs holds a cached model read to about a
+  # quarter of what the disk can deliver, which for a 476GB model is the
+  # difference between a minute and a half and over twenty minutes.
+  mountPodCpu: "{{ jf.get('mountPodCpu', '16') }}"
+  mountPodMemory: "{{ jf.get('mountPodMemory', '5Gi') }}"
 
 # Volumes whose directory inside the JuiceFS filesystem is a name we chose, so
 # that an operator uploading a model and a pod mounting one can agree on a path
