@@ -119,6 +119,27 @@ node:
   ## Eviction policy. Model blocks are written once and never modified, so a
   ## random pick costs nothing and avoids the recency bookkeeping.
   cacheEviction: "2-random"
+  ## How many blocks to fetch ahead in parallel. This is the main throughput knob
+  ## for reading a model back.
+  ##
+  ## A model is read sequentially and each block is only useful once it has
+  ## arrived, so with the default of 1 the reader waits for one block at a time
+  ## and throughput is set by per-block latency rather than by how fast the disk
+  ## or the object store can actually serve data. Fetching several ahead overlaps
+  ## those waits: it lifts a cache hit toward the disk's own speed, and on a miss
+  ## it runs several object store GETs at once instead of serialising them.
+  prefetch: 8
+  ## Read/write buffering in MiB. Raised alongside prefetch so the prefetched
+  ## blocks have somewhere to sit.
+  bufferSize: "2048"
+  ## Verify the checksum stored with each cached block before using it.
+  ##
+  ## "full" costs CPU and memory bandwidth on every cached read, which is pure
+  ## overhead for model weights: blocks are written once, never modified, and a
+  ## corrupted one fails loudly when the model loads or produces nonsense rather
+  ## than silently corrupting anything else. Set to "full" again on a node whose
+  ## local disk is suspect.
+  verifyCacheChecksum: none
 
 ## The StorageClass every business PVC and the model cache use.
 storageClass:

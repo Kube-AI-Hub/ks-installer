@@ -47,12 +47,7 @@ spec:
   # settings, so a volume whose options differ gets a second client on the node
   # and a second block cache beside the first.
   mountOptions:
-    - {{ printf "cache-dir=%s" $root.Values.node.cacheDir | quote }}
-    {{- with $root.Values.node.cacheSize }}
-    - {{ printf "cache-size=%s" . | quote }}
-    {{- end }}
-    - {{ printf "free-space-ratio=%s" $root.Values.node.freeSpaceRatio | quote }}
-    - {{ printf "cache-eviction=%s" $root.Values.node.cacheEviction | quote }}
+    {{- include "juicefs.mountOptions" $root | nindent 4 }}
   claimRef:
     namespace: {{ required (printf "staticVolumes.%s.claimNamespace is required: the namespace that creates the claim this volume is reserved for" $name) $volume.claimNamespace }}
     name: {{ required (printf "staticVolumes.%s.claimName is required: the claim this volume is reserved for" $name) $volume.claimName }}

@@ -72,6 +72,13 @@ IMAGE=""
 
 FREE_SPACE_RATIO="0.1"
 CACHE_EVICTION="2-random"
+# Read throughput knobs, matching what the cluster's own mounts use. See
+# values.yaml for why: a sequential reader with one block in flight waits per
+# block, so several ahead is what lets a cache hit approach disk speed and a miss
+# run object store GETs concurrently.
+PREFETCH="8"
+BUFFER_SIZE="2048"
+VERIFY_CACHE_CHECKSUM="none"
 # The CSI mount pod runs the client on the host's network namespace and leaves
 # the metrics address at its default, so the default is taken. Give this one a
 # distinct address instead of failing to bind.
@@ -370,8 +377,12 @@ if [ -n "\$SUB_PATH" ]; then
   set -- "\$@" --subdir="\$SUB_PATH"
 fi
 
-# Both are optional so an empty value never reaches the client, which would
-# reject it the same way it rejects an empty --subdir.
+# Read path tuning. Each is applied only when set, because the client rejects an
+# empty value the same way it rejects an empty --subdir.
+[ -n "\$PREFETCH" ] && set -- "\$@" "--prefetch=\$PREFETCH"
+[ -n "\$BUFFER_SIZE" ] && set -- "\$@" "--buffer-size=\$BUFFER_SIZE"
+[ -n "\$VERIFY_CACHE_CHECKSUM" ] && set -- "\$@" "--verify-cache-checksum=\$VERIFY_CACHE_CHECKSUM"
+
 if [ -n "\$CACHE_SIZE" ]; then
   set -- "\$@" --cache-size="\$CACHE_SIZE"
 fi
@@ -434,6 +445,9 @@ CACHE_EVICTION=${CACHE_EVICTION}
 METRICS_ADDR=${METRICS_ADDR}
 WRITEBACK=${WRITEBACK}
 CACHE_SIZE=${CACHE_SIZE}
+PREFETCH=${PREFETCH}
+BUFFER_SIZE=${BUFFER_SIZE}
+VERIFY_CACHE_CHECKSUM=${VERIFY_CACHE_CHECKSUM}
 EOF
 }
 
@@ -608,6 +622,9 @@ while [ $# -gt 0 ]; do
     --free-space-ratio)   FREE_SPACE_RATIO="${2:-}"; shift 2 ;;
     --cache-eviction)     CACHE_EVICTION="${2:-}"; shift 2 ;;
     --cache-size)         CACHE_SIZE="${2:-}"; shift 2 ;;
+    --prefetch)           PREFETCH="${2:-}"; shift 2 ;;
+    --buffer-size)        BUFFER_SIZE="${2:-}"; shift 2 ;;
+    --verify-cache-checksum) VERIFY_CACHE_CHECKSUM="${2:-}"; shift 2 ;;
     --writeback)          WRITEBACK="true"; shift ;;
     --fuse-conf)          FUSE_CONF="${2:-}"; shift 2 ;;
     --no-start)           NO_START="true"; shift ;;

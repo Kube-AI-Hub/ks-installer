@@ -71,6 +71,9 @@ node:
   # /data, set common.juicefs.node.cacheDir.
   cacheDir: {{ jf_node.get('cacheDir', '/data/juicefs-cache') }}
   cacheSize: "{{ jf_node.get('cacheSize', '') }}"
+  prefetch: {{ jf_node.get('prefetch', 8) }}
+  bufferSize: "{{ jf_node.get('bufferSize', '2048') }}"
+  verifyCacheChecksum: {{ jf_node.get('verifyCacheChecksum', 'none') }}
   freeSpaceRatio: "{{ jf_node.get('freeSpaceRatio', '0.1') }}"
   cacheEviction: {{ jf_node.get('cacheEviction', '2-random') }}
 

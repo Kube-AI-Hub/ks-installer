@@ -79,7 +79,17 @@ spec:
         #
         # Do not set 0: that disables the disk cache instead of making it
         # unlimited.
-        cacheSize: "600G"
+        cacheSize: "2T"
+        # Reading a model back is sequential, and with the default of one block
+        # in flight the reader waits per block, so throughput ends up set by
+        # per-block latency instead of by the disk or the object store. Several
+        # blocks ahead overlaps those waits.
+        prefetch: 8
+        bufferSize: "2048"
+        # Model blocks are written once and never modified, so verifying their
+        # checksum on every cached read is overhead. Set back to "full" if the
+        # local disks on a node are ever suspect.
+        verifyCacheChecksum: none
         # The real guard against filling the disk.
         freeSpaceRatio: "0.1"
       metadb:

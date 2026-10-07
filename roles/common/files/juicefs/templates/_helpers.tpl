@@ -103,6 +103,37 @@ next to the configuration.
 {{- end -}}
 
 {{/*
+The mount options every volume of this class must carry, as a YAML list.
+
+The CSI driver keys the per-node mount pod by a hash of these settings, and
+STORAGE_CLASS_SHARE_MOUNT makes all volumes of the class share that one pod and
+its one block cache. Two volumes whose options differ therefore get two clients
+and two caches on the same node, halving the effective hit rate for no benefit.
+
+So this is defined once and included everywhere a volume is described: the
+StorageClass the driver provisions from, and the static volumes declared in
+values. Both have to render the identical list.
+*/}}
+{{- define "juicefs.mountOptions" -}}
+{{- $node := .Values.node -}}
+- {{ printf "cache-dir=%s" $node.cacheDir | quote }}
+{{- with $node.cacheSize }}
+- {{ printf "cache-size=%s" . | quote }}
+{{- end }}
+{{- with $node.prefetch }}
+- {{ printf "prefetch=%v" . | quote }}
+{{- end }}
+{{- with $node.bufferSize }}
+- {{ printf "buffer-size=%v" . | quote }}
+{{- end }}
+{{- with $node.verifyCacheChecksum }}
+- {{ printf "verify-cache-checksum=%v" . | quote }}
+{{- end }}
+- {{ printf "free-space-ratio=%s" $node.freeSpaceRatio | quote }}
+- {{ printf "cache-eviction=%s" $node.cacheEviction | quote }}
+{{- end -}}
+
+{{/*
 A Kubernetes quantity as the byte count the driver wants.
 
 The PV capacity is a quantity ("1Ti") while csi.volumeAttributes.capacity is
