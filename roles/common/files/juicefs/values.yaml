@@ -191,6 +191,22 @@ driverOptions:
   ## budget, and at 16 CPUs it takes about a minute and a half.
   mountPodCpu: "16"
   mountPodMemory: 5Gi
+  ## Extra mount options for the mount pod.
+  ##
+  ## writeback stages writes in the node's local block cache and uploads them
+  ## afterwards, instead of blocking the writer on the object store. Writing into a
+  ## volume from this class was measured at 104MB/s, which is MinIO's own ceiling,
+  ## against 1027MB/s for the same bytes on local disk; a model pull is bounded by
+  ## that write, so with writeback a pull runs at the speed the source can serve
+  ## (measured 105MB/s before, 190MB/s after).
+  ##
+  ## The cost is durability. Staged blocks exist only on that node until they drain,
+  ## and no other node can read them until they do, so a node that dies mid-drain
+  ## loses them. Both volumes of this class hold re-creatable content - a model cache
+  ## and a public model store - which is what makes it acceptable here. Empty this
+  ## list if a volume of the class ever holds the only copy of anything.
+  mountOptions:
+    - writeback
 
 ## Debilitate mount point. JuiceFS stores a per-pod mountpoint; on a node running
 ## many workloads this can be raised without consequence.

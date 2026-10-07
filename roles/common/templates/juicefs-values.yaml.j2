@@ -87,6 +87,14 @@ driverOptions:
   # difference between a minute and a half and over twenty minutes.
   mountPodCpu: "{{ jf.get('mountPodCpu', '16') }}"
   mountPodMemory: "{{ jf.get('mountPodMemory', '5Gi') }}"
+  # Extra mount options for the mount pod. writeback stages writes locally and
+  # uploads them afterwards, which is what keeps a model pull off MinIO's 104MB/s
+  # write ceiling; it trades durability for that, so it is listed here rather than
+  # baked in and can be emptied per site.
+  mountOptions:
+{%- for opt in jf.get('mountOptions', ['writeback']) %}
+    - {{ opt }}
+{%- endfor %}
 
 # Volumes whose directory inside the JuiceFS filesystem is a name we chose, so
 # that an operator uploading a model and a pod mounting one can agree on a path

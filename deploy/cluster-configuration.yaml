@@ -105,6 +105,19 @@ spec:
       # from the StorageClass or the PV.
       mountPodCpu: "16"
       mountPodMemory: 5Gi
+      # Mount pod mount options. writeback stages writes in the node's local block
+      # cache and uploads them afterwards, taking the object store off the writer's
+      # critical path: the volume writes at 104MB/s (MinIO's ceiling) against
+      # 1027MB/s for the same bytes on local disk, and a model pull is bounded by
+      # that write, so a pull runs at 105MB/s without it and 190MB/s with it.
+      #
+      # It trades durability for that speed - staged blocks are only on the node
+      # until they drain and no other node can read them until they land - which is
+      # acceptable for the two volumes of this class (a model cache and a public
+      # model store) because both hold re-creatable content. This applies to the
+      # whole class, since the mount pod is shared per node.
+      mountOptions:
+        - writeback
       metadb:
         storageClass: local-static
         size: 20Gi

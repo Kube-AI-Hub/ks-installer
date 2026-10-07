@@ -22,7 +22,7 @@ metadata:
     {{- include "juicefs.labels" . | nindent 4 }}
 data:
   config.yaml: |
-    # Resources for the per-node mount pods.
+    # Resources and mount options for the per-node mount pods.
     mountPodPatch:
       - resources:
           requests:
@@ -31,3 +31,9 @@ data:
           limits:
             cpu: {{ .Values.driverOptions.mountPodCpu | quote }}
             memory: {{ .Values.driverOptions.mountPodMemory | quote }}
+        {{- with .Values.driverOptions.mountOptions }}
+        # writeback, when listed, keeps the writer off the object store's critical
+        # path. See values.yaml for the durability trade-off it carries.
+        mountOptions:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
