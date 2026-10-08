@@ -75,7 +75,13 @@ spec:
               {{- end }}
               {{- end }}
               {{- else }}
-                {{ $mountPath }} \
+              {{- /* Standalone must name the drives the same way they are mounted
+                     below, which is <mountPath>-<j>. Serving the bare mountPath
+                     left MinIO on its own container filesystem instead of the
+                     PersistentVolume. */}}
+              {{- range $j := until $vps }}
+                {{ $mountPath }}-{{ $j }} \
+              {{- end }}
               {{- end }}
               {{- range .Values.extraArgs }}
                 {{ . }} \

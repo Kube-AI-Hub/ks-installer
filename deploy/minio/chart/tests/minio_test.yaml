@@ -36,7 +36,7 @@ tests:
           value: data-0
       - matchRegex:
           path: spec.template.spec.containers[0].command[2]
-          pattern: "server \\\\\n\\s+/data \\\\"
+          pattern: "server \\\\\n\\s+/data-0 \\\\"
       - notMatchRegex:
           path: spec.template.spec.containers[0].command[2]
           pattern: "http://"
@@ -66,7 +66,10 @@ tests:
           value: data-2
       - matchRegex:
           path: spec.template.spec.containers[0].command[2]
-          pattern: "server \\\\\n\\s+/data \\\\"
+          pattern: "server \\\\\n\\s+/data-0 \\\\"
+      - matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "\\s+/data-2 \\\\"
 
   ## ------------------------------------------------------------------
   ## Distributed
