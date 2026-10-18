@@ -72,14 +72,17 @@ spec:
         # back from MinIO instead. That is not a small cost: MinIO ingests at
         # roughly 140MB/s here, so a 471GB model costs ~40 minutes per cold start
         # and blows through the 60 minute engine startup budget, which turns the
-        # instance into a restart loop. 600G covers the largest model in use with
-        # room to spare on the 25T RAID0 at /data1. Only one model of that size
-        # fits at a time; a second one evicts the first, which is the price of
-        # caching at this scale.
+        # instance into a restart loop.
+        #
+        # This is only a ceiling on the block cache, not a reservation, so it can
+        # be generous: 5T holds the 476GB model plus several smaller ones without
+        # evicting each other, and the RAID0 at /data1 is 25T. freeSpaceRatio is
+        # the real guard: caching stops with 10% of the disk left, so the cap is
+        # reached first only while that much room remains.
         #
         # Do not set 0: that disables the disk cache instead of making it
         # unlimited.
-        cacheSize: "2T"
+        cacheSize: "5T"
         # Reading a model back is sequential, and with the default of one block
         # in flight the reader waits per block, so throughput ends up set by
         # per-block latency instead of by the disk or the object store. Several
@@ -103,8 +106,13 @@ spec:
       # Applies through the driver's own config: the node plugin is given
       # --config pointing at a ConfigMap, because mount pod resources are not read
       # from the StorageClass or the PV.
+      #
+      # Memory is not just for the client's own buffers: loading a 476GB
+      # checkpoint through FUSE with a cold page cache OOMed a mount pod at 5Gi
+      # and hung the reader mid-load. Volume is re-creatable here, but an engine
+      # that cannot finish loading is not, which is the cheaper thing to pay for.
       mountPodCpu: "16"
-      mountPodMemory: 5Gi
+      mountPodMemory: 64Gi
       # Mount pod mount options. writeback stages writes in the node's local block
       # cache and uploads them afterwards, taking the object store off the writer's
       # critical path: the volume writes at 104MB/s (MinIO's ceiling) against
