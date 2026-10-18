@@ -10,6 +10,9 @@ templates:
   - controller-statefulset.yaml
   - node-daemonset.yaml
   - static-pv.yaml
+  - driver-config.yaml
+  - mount-monitor.yaml
+  - mount-scrape-hook.yaml
 release:
   name: juicefs
   namespace: kubesphere-system
@@ -468,3 +471,92 @@ tests:
       staticVolumes.kubeaihub-model-cache.subPath: ""
     asserts:
       - failedTemplate: {}
+
+  ## ------------------------------------------------------------------
+  ## Mount pod metrics
+  ## ------------------------------------------------------------------
+  - it: exposes the client metrics the shared storage page charts
+    template: driver-config.yaml
+    documentIndex: 0
+    asserts:
+      # The driver injects its own metrics option only when none is present, and
+      # on hostNetwork it injects a random port. Listing it here is what makes the
+      # endpoint scrapeable.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'metrics=0\.0\.0\.0:9567'
+
+  - it: keeps writeback alongside metrics
+    template: driver-config.yaml
+    documentIndex: 0
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- writeback"
+
+  - it: drops the metrics option when the address is cleared
+    template: driver-config.yaml
+    documentIndex: 0
+    set:
+      driverOptions.metricsAddr: ""
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "metrics="
+
+  - it: writes one scrape target per storage node
+    template: mount-monitor.yaml
+    documentIndex: 0
+    set:
+      storageNodes:
+        - 172.16.10.20
+        - 172.16.10.21
+    asserts:
+      - equal:
+          path: kind
+          value: Secret
+      - equal:
+          path: metadata.namespace
+          value: kubesphere-monitoring-system
+      - matchRegex:
+          path: stringData["scrape.yaml"]
+          pattern: 'targets: \["172\.16\.10\.20:9567"\]'
+      - matchRegex:
+          path: stringData["scrape.yaml"]
+          pattern: 'targets: \["172\.16\.10\.21:9567"\]'
+
+  - it: renders no scrape config when monitoring is turned off
+    template: mount-monitor.yaml
+    set:
+      driverOptions.podMonitor: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: points Prometheus at the mount pod scrape secret
+    template: mount-scrape-hook.yaml
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: kind
+          value: Job
+
+  - it: patches the Prometheus custom resource from the hook job
+    template: mount-scrape-hook.yaml
+    documentIndex: 0
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: 'additionalScrapeConfigs.*juicefs-metrics-scrape'
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'kubectl'
+
+
+  - it: renders no scrape hook when monitoring is turned off
+    template: mount-scrape-hook.yaml
+    set:
+      driverOptions.podMonitor: false
+    asserts:
+      - hasDocuments:
+          count: 0

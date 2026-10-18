@@ -31,9 +31,14 @@ data:
           limits:
             cpu: {{ .Values.driverOptions.mountPodCpu | quote }}
             memory: {{ .Values.driverOptions.mountPodMemory | quote }}
-        {{- with .Values.driverOptions.mountOptions }}
+        {{- $opts := .Values.driverOptions.mountOptions | default (list) }}
+        {{- with .Values.driverOptions.metricsAddr }}
+        {{- $opts = append $opts (printf "metrics=%s" .) }}
+        {{- end }}
+        {{- with $opts }}
         # writeback, when listed, keeps the writer off the object store's critical
-        # path. See values.yaml for the durability trade-off it carries.
+        # path. See values.yaml for the durability trade-off it carries. metrics
+        # is what the shared storage page charts.
         mountOptions:
           {{- toYaml . | nindent 10 }}
         {{- end }}

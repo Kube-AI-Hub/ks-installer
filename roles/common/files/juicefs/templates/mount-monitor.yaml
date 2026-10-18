@@ -1,0 +1,45 @@
+# Copyright 2026 Kube AI Hub.
+#
+# Prometheus cannot discover the JuiceFS mount pods itself.
+#
+# The mount pods run with hostNetwork, so the client's metrics listener is a port
+# on the storage node and the pod declares no container ports. prometheus-operator
+# renders a PodMonitor endpoint as a filter on the pod's declared ports, which
+# drops every mount pod (measured: the job appeared in the generated config with
+# `__meta_kubernetes_pod_container_port_number == 9567` and matched nothing).
+#
+# So the scrape targets are written out per storage node instead. One mount pod
+# serves each node (STORAGE_CLASS_SHARE_MOUNT), and its address is the node's, so
+# this list changes only when the storage nodes do.
+#
+# Values: storageNodes is a list of node IPs, metricsPort the client's port (it
+# must match driverOptions.metricsAddr, which is what makes the client listen).
+{{- if and .Values.driverOptions.podMonitor .Values.driverOptions.metricsAddr }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "juicefs.fullname" . }}-metrics-scrape
+  # Prometheus only reads additionalScrapeConfigs from its own namespace, so this
+  # cannot live next to the driver.
+  namespace: {{ .Values.driverOptions.monitoringNamespace | default "kubesphere-monitoring-system" }}
+  labels:
+    {{- include "juicefs.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  scrape.yaml: |
+    - job_name: juicefs-mount
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      static_configs:
+      {{- range .Values.storageNodes }}
+        - targets: ["{{ . }}:{{ $.Values.driverOptions.metricsAddr | splitList ":" | last }}"]
+          labels:
+            node: {{ . | replace "." "-" | quote }}
+      {{- end }}
+      relabel_configs:
+        # The mount pod names its own instance after the node, so keep the
+        # address as instance to stay consistent with the kubelet series.
+        - source_labels: [__address__]
+          target_label: instance
+{{- end }}

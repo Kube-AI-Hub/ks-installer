@@ -15,6 +15,12 @@
 ## Registry prefix applied to every image below, for example
 ## dockerhub.kubekey.local/kube-ai-hub. A per-image `registry` overrides it.
 imageRegistry: ""
+## Image used by the one-shot hook that points Prometheus at the mount pod scrape
+## config. Any image with kubectl works; the registry prefix above applies.
+kubectlImage:
+  repository: kubectl
+  tag: "v1.33.4-kah"
+  pullPolicy: IfNotPresent
 
 ## Driver namespace. The CSI Secret and StorageClass reference it explicitly, so
 ## the two must agree.
@@ -207,6 +213,33 @@ driverOptions:
   ## list if a volume of the class ever holds the only copy of anything.
   mountOptions:
     - writeback
+  ## Prometheus endpoint of the mount pod, e.g. "0.0.0.0:9567".
+  ##
+  ## The client exposes read/write throughput, block cache hit rate and object
+  ## store latency on this address, which is what the console page charts. It has
+  ## to be listed here rather than on the volumes: the driver only injects its own
+  ## metrics option when none is present, and with hostNetwork it injects port 0
+  ## (a random port nothing can scrape). Listing it in the driver config also means
+  ## every mount pod gets it, including pods created for a dynamically
+  ## provisioned volume whose own mountOptions predate this setting.
+  ##
+  ## Leave empty to keep metrics off.
+  metricsAddr: "0.0.0.0:9567"
+  ## Create the scrape config that reads metricsAddr. Needs prometheus-operator.
+  ##
+  ## A Secret with additionalScrapeConfigs rather than a PodMonitor: the mount
+  ## pods use hostNetwork and declare no container ports, so a PodMonitor's port
+  ## selector matches nothing. See templates/mount-monitor.yaml.
+  podMonitor: true
+  ## Namespace of the Prometheus that reads the scrape config. Prometheus only
+  ## loads additionalScrapeConfigs from its own namespace, so the Secret has to be
+  ## written there rather than beside the driver.
+  monitoringNamespace: kubesphere-monitoring-system
+
+## Addresses of the storage nodes, used as the scrape targets for the mount pod
+## metrics (one mount pod per node, listening on the node's network namespace).
+## Set this on a site whose node IPs are known; empty renders no scrape config.
+storageNodes: []
 
 ## Debilitate mount point. JuiceFS stores a per-pod mountpoint; on a node running
 ## many workloads this can be raised without consequence.

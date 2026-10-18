@@ -1,0 +1,102 @@
+# Copyright 2026 Kube AI Hub.
+#
+# Points Prometheus at the mount pod scrape config the juicefs chart writes.
+#
+# The mount pods run with hostNetwork and declare no container ports, so
+# prometheus-operator cannot discover them (a PodMonitor endpoint is rendered as a
+# filter over declared container ports and drops every mount pod). The chart
+# therefore writes a static target list - one entry per storage node - as a Secret,
+# and this tells Prometheus to load it.
+#
+# additionalScrapeConfigs is read from a Secret in the Prometheus's own namespace,
+# which is why the Secret lives here rather than next to the driver.
+#
+# Applied with a merge patch rather than owned by a release: the Prometheus CR is
+# managed by KubeSphere's monitoring stack, not by this repository, and a merge
+# keeps the rest of its spec (retention, resources, storage) untouched. Re-running
+# is idempotent.
+{{- if and .Values.driverOptions.podMonitor .Values.driverOptions.metricsAddr }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "juicefs.fullname" . }}-scrape-config
+  namespace: {{ include "juicefs.namespace" . }}
+  labels:
+    {{- include "juicefs.labels" . | nindent 4 }}
+  annotations:
+    # The job only patches a field; rerunning on every upgrade is harmless and
+    # keeps the setting from being lost if the monitoring stack is reinstalled.
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "juicefs.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "juicefs.fullname" . }}-scrape-config
+      containers:
+        - name: patch
+          image: {{ include "juicefs.imageRef" (dict "ctx" . "image" .Values.kubectlImage) }}
+          imagePullPolicy: {{ .Values.kubectlImage.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              kubectl -n {{ .Values.driverOptions.monitoringNamespace | default "kubesphere-monitoring-system" }} \
+                patch prometheus k8s --type merge -p \
+                '{"spec":{"additionalScrapeConfigs":{"name":"{{ include "juicefs.fullname" . }}-metrics-scrape","key":"scrape.yaml"}}}'
+              echo "prometheus now loads {{ include "juicefs.fullname" . }}-metrics-scrape"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "juicefs.fullname" . }}-scrape-config
+  namespace: {{ include "juicefs.namespace" . }}
+  labels:
+    {{- include "juicefs.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "juicefs.fullname" . }}-scrape-config
+  labels:
+    {{- include "juicefs.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+  # Only the one field is written, but patch is a whole-object verb.
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["prometheuses"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "juicefs.fullname" . }}-scrape-config
+  labels:
+    {{- include "juicefs.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "juicefs.fullname" . }}-scrape-config
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "juicefs.fullname" . }}-scrape-config
+    namespace: {{ include "juicefs.namespace" . }}
+{{- end }}

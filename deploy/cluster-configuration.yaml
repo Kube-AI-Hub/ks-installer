@@ -126,6 +126,18 @@ spec:
       # whole class, since the mount pod is shared per node.
       mountOptions:
         - writeback
+      # Prometheus endpoint of the mount pod, and the node addresses to scrape it
+      # from. The mount pod runs in the node's network namespace and the driver
+      # only declares a container port when it is not, so a PodMonitor cannot
+      # discover it; the scrape config lists the storage nodes instead.
+      #
+      # The console's shared storage page charts these series: read/write
+      # throughput, block cache hit rate and object store latency.
+      metricsAddr: "0.0.0.0:9567"
+      podMonitor: true
+      storageNodes:
+        - 172.16.10.20
+        - 172.16.10.21
       # Capacity of the two static volumes. The driver turns this into a
       # directory quota on the volume's subPath, so it is the real limit on how
       # much a volume holds - not the block cache size, which is per node.
