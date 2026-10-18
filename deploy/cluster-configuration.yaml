@@ -126,6 +126,23 @@ spec:
       # whole class, since the mount pod is shared per node.
       mountOptions:
         - writeback
+      # Capacity of the two static volumes. The driver turns this into a
+      # directory quota on the volume's subPath, so it is the real limit on how
+      # much a volume holds - not the block cache size, which is per node.
+      #
+      # 5Ti because a single model is 476GB and the public store is meant to hold
+      # several: at the old 1Ti the cache (546GB of models) left under 478GB, and
+      # a copy of the 476GB model into the public directory hit the quota. The
+      # quota is a ceiling, not a reservation, and the object store is the next
+      # limit (4 x 3Ti disks, EC:2, about 6Ti usable).
+      #
+      # The PV's capacity attribute is immutable, so changing these values does
+      # not resize an existing volume: recreate the PV with the new capacity and
+      # run `juicefs quota set --path <subPath> --capacity <size>`. The claim can
+      # stay smaller than the volume; the quota comes from the PV.
+      staticVolumes:
+        modelCacheCapacity: 5Ti
+        publicModelsCapacity: 5Ti
       metadb:
         storageClass: local-static
         size: 20Gi
