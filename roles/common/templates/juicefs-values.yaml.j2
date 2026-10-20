@@ -101,6 +101,23 @@ driverOptions:
   metricsAddr: "{{ jf.get('metricsAddr', '0.0.0.0:9567') }}"
   podMonitor: {{ jf.get('podMonitor', true) | lower }}
 
+# Extra args for the node plugin only.
+#
+# --enable-manager is what makes the node plugin watch the mount pods on its own
+# node and reclaim them, which includes clearing their juicefs.com/finalizer. It
+# is not optional: the controller's --by-process=true (see driverOptions.mountPod)
+# forces the driver's own config.MountManager off, so the controller never runs a
+# manager at all, and without this flag nothing in the cluster removes that
+# finalizer. Mount pods then pile up in Failed/Succeeded with a deletion
+# timestamp and never go away -- and because kubectl drain waits for them, a node
+# drain cannot finish cleanly either.
+#
+# Not a chart-template change on purpose: the chart already ranges over this list
+# in node-daemonset.yaml, so sites installed from an older chart pick the fix up
+# through values alone.
+nodeExtraArgs:
+  - --enable-manager=true
+
 # Node IPs the mount pod metrics are scraped from. One mount pod serves each node,
 # so these are the only targets the scrape config needs.
 storageNodes: {{ jf.get('storageNodes', []) | tojson }}
