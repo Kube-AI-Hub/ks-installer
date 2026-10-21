@@ -56,7 +56,16 @@ spec:
             - --logtostderr
             - --nodeid=$(NODE_NAME)
             - --v={{ .Values.driverOptions.logLevel }}
-            - --enable-manager
+            {{- /*
+            No --enable-manager here: that flag is node-only. The driver registers it
+            as "Enable pod manager in csi node" and only cmd/node.go reads it, so on
+            the controller it was a no-op that just implied a manager was running.
+
+            --by-process stays. It is the driver's process mode, and the controller
+            does not want a mount manager anyway: that one only clears a mount pod's
+            finalizer after the node's csi-node pod is gone, which never happens here.
+            Reclaiming mount pods is the node plugin's job - see nodeExtraArgs.
+            */}}
             {{- if .Values.driverOptions.mountPod }}
             - --by-process=true
             {{- end }}
